@@ -12,8 +12,10 @@ exports.handler = async (event) => {
     return json(405, { error: "Method Not Allowed" });
   }
 
-  const adminKeyEnv = (process.env.ADMIN_KEY || "").trim();
-  const adminKey = (event.headers["x-admin-key"] || event.headers["X-Admin-Key"] || "").trim();
+  const adminKeyEnv = (process.env.ADMIN_KEY || "").trim().normalize("NFKC");
+  const adminKey = ((event.headers["x-admin-key"] || event.headers["X-Admin-Key"] || "") + "")
+  .trim()
+  .normalize("NFKC");
 
   if (!adminKeyEnv || adminKey !== adminKeyEnv) {
     return json(401, { error: "No autorizado." });
