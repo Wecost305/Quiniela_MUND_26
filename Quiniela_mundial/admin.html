@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — Quiniela Mundial 2026</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Teko:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    body{ min-height: 100vh; display:flex; align-items:center; justify-content:center; padding: 18px; }
+    .admin-card{
+      width:min(720px,100%);
+      background: rgba(255,255,255,.06);
+      border:1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-soft);
+      padding: 18px 18px;
+    }
+    .admin-title{ font-family: var(--font-title); font-size: 2.3rem; letter-spacing: .6px; }
+    .admin-sub{ color: var(--muted); margin-top: 6px; line-height:1.35; }
+    .admin-row{ display:flex; gap: 10px; margin-top: 14px; align-items: stretch; }
+    .admin-row input{
+      flex:1;
+      padding: 12px 12px;
+      border-radius: var(--radius-md);
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.06);
+      color: var(--text);
+      outline: none;
+    }
+    .admin-row input:focus{
+      border-color: rgba(0,229,255,.45);
+      box-shadow: 0 0 0 3px rgba(0,229,255,.12);
+    }
+    .admin-actions{ margin-top: 12px; display:flex; gap: 10px; flex-wrap: wrap; }
+    .admin-out{
+      margin-top: 14px;
+      padding: 12px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border);
+      background: rgba(0,0,0,.25);
+      overflow-wrap: anywhere;
+    }
+    .admin-err{ margin-top: 10px; color: rgba(230,29,37,.95); font-weight: 600; min-height: 22px; }
+    .chip{
+      display:inline-flex; align-items:center; gap:8px;
+      padding: 6px 10px; border-radius: 999px;
+      background: rgba(255,255,255,.06); border:1px solid var(--border);
+      color: rgba(255,255,255,.82); font-size: .92rem;
+    }
+    @media (max-width: 520px){
+      .admin-row{ flex-direction: column; }
+      .admin-actions .knockout-stage-btn{ width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="admin-card">
+    <div class="admin-title">Admin — Invitaciones</div>
+    <div class="admin-sub">
+      Genera links de <b>un solo uso</b> para activar un dispositivo. El link se bloquea después del primer acceso.
+    </div>
+
+    <div class="admin-row">
+      <input id="adminKey" type="password" placeholder="ADMIN_KEY (secreto)" autocomplete="off"/>
+      <button id="btnCreate" class="knockout-stage-btn" type="button">Crear invitación</button>
+    </div>
+
+    <div class="admin-actions">
+      <span class="chip">📌 Se recomienda crear un link por persona</span>
+      <span class="chip">🧾 Guarda el link en tu CRM/WhatsApp</span>
+    </div>
+
+    <div id="err" class="admin-err"></div>
+
+    <div id="out" class="admin-out" style="display:none;">
+      <div><b>Link de invitación:</b></div>
+      <div id="inviteUrl" style="margin-top:6px;"></div>
+      <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
+        <button id="btnCopy" class="knockout-stage-btn" type="button">Copiar</button>
+        <button id="btnNew" class="btn" type="button">Crear otra</button>
+      </div>
+      <div style="margin-top:10px; color: var(--muted);">
+        <b>UserId:</b> <span id="userId"></span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function createInvite(){
+      const adminKey = document.getElementById('adminKey').value.trim();
+      const err = document.getElementById('err');
+      const out = document.getElementById('out');
+      err.textContent = '';
+      out.style.display = 'none';
+
+      if(!adminKey){
+        err.textContent = 'Ingresa tu ADMIN_KEY.';
+        return;
+      }
+
+      try{
+        const res = await fetch('/.netlify/functions/create-invite', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'x-admin-key': adminKey
+          },
+          body: JSON.stringify({})
+        });
+
+        const data = await res.json().catch(() => ({}));
+
+        if(!res.ok){
+          err.textContent = data && data.error ? data.error : ('Error ' + res.status);
+          return;
+        }
+
+        document.getElementById('inviteUrl').textContent = data.inviteUrl || '';
+        document.getElementById('userId').textContent = data.userId || '';
+        out.style.display = 'block';
+
+      }catch(e){
+        err.textContent = 'No se pudo conectar a las Functions. Asegúrate de estar en Netlify (o netlify dev).';
+      }
+    }
+
+    async function copyInvite(){
+      const text = document.getElementById('inviteUrl').textContent.trim();
+      if(!text) return;
+      try{
+        await navigator.clipboard.writeText(text);
+      }catch(e){
+        // fallback
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+      }
+    }
+
+    document.getElementById('btnCreate').addEventListener('click', createInvite);
+    document.getElementById('btnCopy').addEventListener('click', copyInvite);
+    document.getElementById('btnNew').addEventListener('click', () => {
+      document.getElementById('out').style.display = 'none';
+      document.getElementById('err').textContent = '';
+    });
+  </script>
+</body>
+</html>
