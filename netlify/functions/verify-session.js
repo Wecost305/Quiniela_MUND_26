@@ -1,43 +1,43 @@
-const crypto = require("node:crypto");
-const { getStore } = require("@netlify/blobs");
-const { json } = require("./_common");
+import crypto from 'node:crypto';
+import { getStore } from '@netlify/blobs';
+import { json } from './_common.js';
 
 function sha256Hex(s) {
-  return crypto.createHash("sha256").update(String(s || "")).digest("hex");
+  return crypto.createHash('sha256').update(String(s || '')).digest('hex');
 }
 
-exports.handler = async (event) => {
-  if (event.httpMethod !== "POST") {
-    return json(405, { error: "Method Not Allowed" });
-  }
+export default async function handler(req, context) {
+  if (req.method !== 'POST') return json(405, { error: 'Method Not Allowed' });
 
   let body = {};
-  try { body = event.body ? JSON.parse(event.body) : {}; } catch(e) {}
+  try {
+    body = await req.json();
+  } catch (e) {
+    body = {};
+  }
 
-  const sessionId = String(body.sessionId || "").trim();
-  const deviceId  = String(body.deviceId || "").trim();
+  const sessionId = String(body.sessionId || '').trim();
+  const deviceId = String(body.deviceId || '').trim();
 
-  if (!sessionId) return json(400, { error: "sessionId requerido." });
-  if (!deviceId)  return json(400, { error: "deviceId requerido." });
+  if (!sessionId) return json(400, { error: 'sessionId requerido.' });
+  if (!deviceId) return json(400, { error: 'deviceId requerido.' });
 
   try {
-    const store = getStore({ name: "qm2026", consistency: "strong" });
+    const store = getStore({ name: 'qm2026', consistency: 'strong' });
 
-    const session = await store.get(`sessions/${sessionId}`, { type: "json", consistency: "strong" });
-    if (!session) return json(401, { error: "Sesión inválida. Vuelve a activar tu acceso." });
+    const session = await store.get(`sessions/${sessionId}`, { type: 'json', consistency: 'strong' });
+    if (!session) return json(401, { error: 'Sesión inválida. Vuelve a activar tu acceso.' });
 
     const deviceHash = sha256Hex(deviceId);
     if (session.deviceHash !== deviceHash) {
-      return json(403, { error: "Esta sesión pertenece a otro dispositivo." });
+      return json(403, { error: 'Esta sesión pertenece a otro dispositivo.' });
     }
 
-    // touch lastSeen (best-effort)
     const now = Date.now();
     await store.setJSON(`sessions/${sessionId}`, { ...session, lastSeenAt: now });
 
     return json(200, { ok: true, userId: session.userId });
-
   } catch (e) {
-    return json(500, { error: "Error interno al validar sesión." });
+    return json(500, { error: 'Error interno al validar sesión.', detail: String(e?.message || e) });
   }
-};
+}
