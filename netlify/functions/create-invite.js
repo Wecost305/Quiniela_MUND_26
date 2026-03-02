@@ -3,7 +3,6 @@ import { getStore } from '@netlify/blobs';
 import { json } from './_common.js';
 
 function randToken(bytes = 18) {
-  // URL-safe token
   return crypto
     .randomBytes(bytes)
     .toString('base64')
@@ -12,7 +11,7 @@ function randToken(bytes = 18) {
     .replace(/=+$/g, '');
 }
 
-export default async function handler(req, context) {
+export default async function handler(req) {
   if (req.method !== 'POST') return json(405, { error: 'Method Not Allowed' });
 
   const adminKeyEnv = (process.env.ADMIN_KEY || '').trim().normalize('NFKC');
@@ -23,36 +22,40 @@ export default async function handler(req, context) {
   }
 
   try {
-    // Netlify Blobs necesita Functions v2 (export default) para tener contexto
-    const store = getStore({ name: 'qm2026', consistency: 'strong' });
+    // store-level strong consistency (válido en Netlify Blobs)
+    const store = getStore({ name: 'qm2026', consistency: 'strong' }); :contentReference[oaicite:1]{index=1}
 
-    const token = randToken(18);
-    const userId = 'u_' + randToken(10);
     const now = Date.now();
+    let token = '';
+    let userId = '';
+    let inviteKey = '';
 
-    const inviteKey = `invites/${token}`;
+    for (let i = 0; i < 10; i++) {
+      token = randToken(18);
+      userId = 'u_' + randToken(10);
+      inviteKey = `invites/${token}`;
 
-    const { modified } = await store.setJSON(
-      inviteKey,
-      {
-        token,
-        userId,
-        createdAt: now,
-        used: false
-      },
-      { onlyIfNew: true }
-    );
-
-    if (!modified) {
-      return json(500, { error: 'No se pudo crear la invitación. Intenta de nuevo.' });
+      const existing = await store.get(inviteKey, { consistency: 'strong' });
+      if (existing === null) break;
+      token = '';
     }
+
+    if (!token) {
+      return json(500, { error: 'No se pudo generar un token único. Intenta de nuevo.' });
+    }
+
+    await store.setJSON(inviteKey, {
+      token,
+      userId,
+      createdAt: now,
+      used: false
+    });
 
     const origin = new URL(req.url).origin;
     const inviteUrl = `${origin}/?invite=${encodeURIComponent(token)}`;
 
     return json(200, { token, userId, inviteUrl });
   } catch (e) {
-    // Solo el admin puede llamar este endpoint, así que devolvemos el mensaje para debug.
     return json(500, { error: 'Error interno al crear invitación.', detail: String(e?.message || e) });
   }
 }
