@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiniela Mundial 2026</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&family=Teko:wght@700&display=swap" rel="stylesheet">
+</head>
+<body>
+<!-- Splash / Portada -->
+<div class="splash" id="splash" aria-label="Cargando quiniela" role="status">
+  <div class="splash__bg"></div>
+
+  <div class="splash__card">
+    <div class="splash__brand">
+      <!-- Usa tu logo actual o uno del torneo -->
+      <img class="splash__logo" src="images/logo_wecost.png" alt="FIFA World Cup 26" />
+      <div class="splash__title">Quiniela Mundial 2026</div>
+      <div class="splash__subtitle">Cargando grupos y eliminatoria…</div>
+    </div>
+
+    <!-- Mascotas (pon la(s) que quieras) -->
+    <div class="splash__mascots">
+      <img class="splash__mascot" src="images/zayu.png" alt="Zayu" />
+      <img class="splash__mascot" src="images/maple.png" alt="Maple" />
+      <img class="splash__mascot" src="images/clutch.png" alt="Clutch" />
+    </div>
+
+    <div class="splash__loader" aria-hidden="true">
+      <span></span><span></span><span></span>
+    </div>
+  </div>
+</div>
+ <!-- ================================================== -->
+    <!-- === NUEVO MODAL PARA REGISTRO DE NOMBRE === -->
+    <!-- ================================================== -->
+    <div id="name-modal" class="modal-overlay" style="display: none; z-index: 2000;">
+        <div class="modal-content" style="max-width: 400px; height: auto; text-align: center;">
+            <h2 class="section-title">¡Bienvenido!</h2>
+            <p style="color: var(--muted); margin-bottom: 10px;">Por favor, ingresa tu nombre para personalizar tu quiniela.</p>
+            <p style="color: var(--muted); margin: 0 0 8px;">✅ Tus cambios se guardan automáticamente.</p>
+            <p style="color: var(--muted); margin: 0 0 20px;">🔒 Este dispositivo quedará vinculado a tu quiniela.</p>
+            <form id="name-form">
+                <input type="text" id="user-name-input" placeholder="Escribe tu nombre aquí" required style="width: 80%; padding: 12px; font-size: 1.1em; border-radius: 8px; border: 1px solid var(--border-color);">
+                <button type="submit" class="knockout-stage-btn" style="font-size: 1.5em; margin-top: 20px;">Guardar y Continuar</button>
+            </form>
+        </div>
+    </div>
+
+
+    <!-- Acceso (Opción B: token de un solo uso) -->
+    <div id="auth-gate" class="auth-gate is-hidden" role="dialog" aria-modal="true" aria-label="Acceso a tu quiniela">
+        <div class="auth-gate__bg"></div>
+        <div class="auth-gate__card">
+            <div class="auth-gate__title">Acceso a tu quiniela</div>
+            <div class="auth-gate__subtitle">Pega tu <b>token</b> o el <b>link</b> de invitación para activar este dispositivo.</div>
+
+            <div class="auth-gate__tips">
+                <div>✅ Tus cambios se guardan automáticamente.</div>
+                <div>🔒 Este dispositivo quedará vinculado a tu quiniela.</div>
+            </div>
+
+            <div class="auth-gate__form">
+                <input id="invite-token-input" class="auth-gate__input" type="text" placeholder="Token o link de invitación" autocomplete="off" />
+                <button id="btn-redeem-invite" class="knockout-stage-btn" type="button">Entrar</button>
+            </div>
+
+            <div id="auth-gate-error" class="auth-gate__error" aria-live="polite"></div>
+            <div class="auth-gate__small">Si no tienes tu acceso, solicítalo al administrador.</div>
+        </div>
+    </div>
+
+    <header class="main-header">
+<div class="logo-container">
+    <!-- Envolvemos la imagen en un enlace 'a' para que sea clickeable -->
+    <a href="#" class="logo-link"> 
+        <img src="images/logo_wecost.png" alt="Logo de la Empresa" class="logo-image">
+    </a>
+</div>
+        <h1 class="main-title">QUINIELA MUNDIAL 2026</h1>
+        <div class="user-info">
+            <span id="user-name-display">Quiniela de: --</span>
+        </div>
+    
+    </header>
+
+    <!-- Barra de progreso y acciones rápidas -->
+    <section class="topbar" id="topbar" aria-label="Controles rápidos">
+        <div class="topbar__left">
+            <div class="topbar__metric">
+                <span class="topbar__label">Partidos capturados</span>
+                <span id="progress-groups" class="topbar__value">0/72</span>
+            </div>
+            <div class="topbar__metric">
+                <span class="topbar__label">Eliminatoria</span>
+                <span id="progress-ko" class="topbar__value">0/31</span>
+            </div>
+        </div>
+        <div class="topbar__right">
+            <span id="save-indicator" class="save-indicator" aria-live="polite">—</span>
+            <button class="btn btn-sm" type="button" id="btn-next-incomplete">Ir al siguiente incompleto</button>
+            <button class="btn btn-sm" type="button" id="btn-export">Exportar</button>
+            <button class="btn btn-sm btn-danger" type="button" id="btn-reset-all">Reset</button>
+        </div>
+    </section>
+
+
+    <!-- HERO / BANNER (estilo streaming) -->
+    <section class="hero" aria-label="Banner principal">
+        <div>
+            <h2 class="hero-title">Vive el Mundial 2026 — En modo Quiniela</h2>
+            <p class="hero-subtitle">Captura resultados en fase de grupos y mira cómo se arma automáticamente la fase eliminatoria.</p>
+            <div class="hero-actions">
+                <a class="btn btn-primary" href="#groups-section">Ir a Fase de Grupos</a>
+                <button class="btn" type="button" onclick="document.getElementById('bracket-modal').style.display='flex'">Ver Fase Eliminatoria</button>
+            </div>
+        </div>
+        <div class="hero-badges">
+            <div class="hero-chip"><span class="hero-dot"></span> 12 Grupos</div>
+            <div class="hero-chip"><span class="hero-dot mag"></span> 32 a Eliminatoria</div>
+            <div class="hero-chip"><span class="hero-dot lime"></span> Final + 3er Lugar</div>
+        </div>
+    </section>
+
+
+    <main class="main-content">
+        <h2 class="section-title" id="groups-section">FASE DE GRUPOS</h2>
+        <div class="groups-grid" id="groups-container">
+            <!-- Las tarjetas de grupo se generarán aquí con JavaScript -->
+        </div>
+
+        <div class="third-place-table-container">
+            <h2 class="section-title">MEJORES TERCEROS</h2>
+            <table class="third-place-table">
+                <thead>
+                    <tr><th>Pos</th><th>Eq</th><th>Pts</th><th>PJ</th><th>GF</th><th>GC</th><th>Dif</th></tr>
+                </thead>
+                <tbody id="third-place-body">
+                    <!-- Las filas de los terceros se generarán aquí -->
+                </tbody>
+            </table>
+        </div>
+
+        <div class="knockout-stage-button-container">
+            <button class="knockout-stage-btn" onclick="document.getElementById('bracket-modal' ).style.display='flex'">
+                VER FASE ELIMINATORIA
+            </button>
+        </div>
+    </main>
+
+    <!-- Modal del Bracket -->
+    <div id="bracket-modal" class="modal-overlay">
+        <div class="modal-content">
+            <button class="modal-close-btn" onclick="document.getElementById('bracket-modal').style.display='none'">&times;</button>
+            <h2 class="section-title">FASE ELIMINATORIA</h2>
+            <div class="bracket-container-topdown" id="bracket-container">
+                <!-- El bracket completo se generará aquí con JavaScript -->
+            </div>
+
+                        <!-- ================================================== -->
+            <!-- === NUEVA SECCIÓN DE ESTADÍSTICAS GLOBALES === -->
+            <!-- ================================================== -->
+            <div id="global-stats-container" class="global-stats-container">
+                <div class="stats-card">
+                    <h4 class="stats-title">🏆 Máximos Goleadores (GF)</h4>
+                    <table class="stats-table">
+                        <tbody id="stats-top-scorers">
+                            <!-- Filas generadas por JS -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="stats-card">
+                    <h4 class="stats-title">🛡️ Mejores Defensas (GC)</h4>
+                    <table class="stats-table">
+                        <tbody id="stats-best-defense">
+                            <!-- Filas generadas por JS -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="stats-card">
+                    <h4 class="stats-title">🔥 Partidos con más Goles</h4>
+                    <table class="stats-table">
+                        <tbody id="stats-top-matches">
+                            <!-- Filas generadas por JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+
+
+    <!-- Modal de Exportación -->
+    <div id="export-modal" class="modal-overlay" style="display: none; z-index: 2500;">
+        <div class="modal-content export-modal" style="max-width: 520px; height: auto;">
+            <button class="modal-close-btn" id="export-close" aria-label="Cerrar">&times;</button>
+            <h2 class="section-title" style="margin-top: 0;">EXPORTAR</h2>
+            <p class="export-help">Exporta tu quiniela como imagen para compartirla sin dar acceso de edición.</p>
+            <div class="export-actions">
+                <button class="knockout-stage-btn" type="button" id="export-groups">Exportar Grupos (PNG)</button>
+                <button class="knockout-stage-btn" type="button" id="export-bracket">Exportar Eliminatoria (PNG)</button>
+                <button class="btn" type="button" id="export-cancel">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCRIPTS (AL FINAL Y EN EL ORDEN CORRECTO) -->
+    <script src="groups-data.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script src="main.js"></script>
+
+</body>
+</html>
