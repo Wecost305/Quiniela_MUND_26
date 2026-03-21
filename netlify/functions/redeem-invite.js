@@ -1,6 +1,6 @@
-import crypto from 'node:crypto';
-import { getStore } from '@netlify/blobs';
-import { json } from './_common.js';
+const crypto = require('crypto');
+const { getStore, connectLambda } = require('@netlify/blobs');
+const { json } = require('./_common');
 
 function sha256Hex(s) {
   return crypto.createHash('sha256').update(String(s || '')).digest('hex');
@@ -15,12 +15,12 @@ function randToken(bytes = 18) {
     .replace(/=+$/g, '');
 }
 
-export default async function handler(req, context) {
-  if (req.method !== 'POST') return json(405, { error: 'Method Not Allowed' });
+exports.handler = async (event) => {
+  if (event.httpMethod !== 'POST') return json(405, { error: 'Method Not Allowed' });
 
   let body = {};
   try {
-    body = await req.json();
+    body = JSON.parse(event.body || '{}');
   } catch (e) {
     body = {};
   }
@@ -32,6 +32,8 @@ export default async function handler(req, context) {
   if (!deviceId) return json(400, { error: 'DeviceId requerido.' });
 
   try {
+    // Inicializa entorno de Blobs para funciones en modo Lambda compatibility.
+    connectLambda(event);
     const store = getStore({ name: 'qm2026', consistency: 'strong' });
 
     const inviteKey = `invites/${token}`;
@@ -69,6 +71,6 @@ export default async function handler(req, context) {
 
     return json(200, { sessionId, userId: invite.userId });
   } catch (e) {
-    return json(500, { error: 'Error interno al canjear token.', detail: String(e?.message || e) });
+    return json(500, { error: 'Error interno al canjear token.', detail: String(e && e.message ? e.message : e) });
   }
-}
+};

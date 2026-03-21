@@ -3,7 +3,6 @@
   "private": true,
   "version": "1.0.0",
   "description": "Quiniela Mundial 2026 (static + Netlify Functions + Blobs)",
-  "type": "module",
   "dependencies": {
     "@netlify/blobs": "^8.0.0"
   },

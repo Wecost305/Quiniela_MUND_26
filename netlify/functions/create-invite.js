@@ -1,9 +1,8 @@
-import crypto from 'node:crypto';
-import { getStore } from '@netlify/blobs';
-import { json } from './_common.js';
+const crypto = require('crypto');
+const { getStore, connectLambda } = require('@netlify/blobs');
+const { json } = require('./_common');
 
 function randToken(bytes = 18) {
-  // URL-safe token
   return crypto
     .randomBytes(bytes)
     .toString('base64')
@@ -12,47 +11,58 @@ function randToken(bytes = 18) {
     .replace(/=+$/g, '');
 }
 
-export default async function handler(req, context) {
-  if (req.method !== 'POST') return json(405, { error: 'Method Not Allowed' });
+exports.handler = async (event) => {
+  if (event.httpMethod !== 'POST') return json(405, { error: 'Method Not Allowed' });
 
   const adminKeyEnv = (process.env.ADMIN_KEY || '').trim().normalize('NFKC');
-  const adminKey = (req.headers.get('x-admin-key') || '').trim().normalize('NFKC');
+  const adminKey = String(event.headers['x-admin-key'] || event.headers['X-Admin-Key'] || '')
+    .trim()
+    .normalize('NFKC');
 
   if (!adminKeyEnv || adminKey !== adminKeyEnv) {
     return json(401, { error: 'No autorizado.' });
   }
 
   try {
-    // Netlify Blobs necesita Functions v2 (export default) para tener contexto
+    // Netlify Blobs no se auto-configura en modo "Lambda compatibility".
+    // Hay que inicializar el entorno con el event antes de usar getStore().
+    connectLambda(event);
     const store = getStore({ name: 'qm2026', consistency: 'strong' });
 
-    const token = randToken(18);
-    const userId = 'u_' + randToken(10);
     const now = Date.now();
+    let token = '';
+    let userId = '';
+    let inviteKey = '';
 
-    const inviteKey = `invites/${token}`;
+    // generar token único (muy baja probabilidad de colisión, pero validamos)
+    for (let i = 0; i < 10; i++) {
+      token = randToken(18);
+      userId = 'u_' + randToken(10);
+      inviteKey = `invites/${token}`;
 
-    const { modified } = await store.setJSON(
-      inviteKey,
-      {
-        token,
-        userId,
-        createdAt: now,
-        used: false
-      },
-      { onlyIfNew: true }
-    );
-
-    if (!modified) {
-      return json(500, { error: 'No se pudo crear la invitación. Intenta de nuevo.' });
+      const existing = await store.get(inviteKey, { consistency: 'strong' });
+      if (existing === null) break;
+      token = '';
     }
 
-    const origin = new URL(req.url).origin;
+    if (!token) {
+      return json(500, { error: 'No se pudo generar un token único. Intenta de nuevo.' });
+    }
+
+    await store.setJSON(inviteKey, {
+      token,
+      userId,
+      createdAt: now,
+      used: false
+    });
+
+    const proto = event.headers['x-forwarded-proto'] || 'https';
+    const host = event.headers.host || process.env.URL?.replace(/^https?:\/\//,'') || '';
+    const origin = process.env.URL || `${proto}://${host}`;
     const inviteUrl = `${origin}/?invite=${encodeURIComponent(token)}`;
 
     return json(200, { token, userId, inviteUrl });
   } catch (e) {
-    // Solo el admin puede llamar este endpoint, así que devolvemos el mensaje para debug.
-    return json(500, { error: 'Error interno al crear invitación.', detail: String(e?.message || e) });
+    return json(500, { error: 'Error interno al crear invitación.', detail: String(e && e.message ? e.message : e) });
   }
-}
+};
