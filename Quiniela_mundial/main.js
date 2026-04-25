@@ -403,30 +403,113 @@ function syncFormValues(sourceRoot, cloneRoot) {
     });
 }
 
-async function exportElementToPNG(element, filenameBase) {
-    if (!element) return;
-    if (typeof html2canvas !== 'function') {
-        alert('No se pudo cargar el exportador (html2canvas). Revisa tu conexión.');
-        return;
+function buildExportFilename(filenameBase, extension = 'png') {
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    return `${filenameBase}-${stamp}.${extension}`;
+}
+
+function canvasToPNGBlob(canvas) {
+    return new Promise((resolve, reject) => {
+        canvas.toBlob(blob => {
+            if (blob) resolve(blob);
+            else reject(new Error('No se pudo generar la imagen PNG.'));
+        }, 'image/png');
+    });
+}
+
+function showManualDownloadToast(url, filename) {
+    const previous = document.getElementById('manual-download-toast');
+    if (previous) previous.remove();
+
+    const toast = document.createElement('div');
+    toast.id = 'manual-download-toast';
+    toast.className = 'manual-download-toast';
+    toast.innerHTML = `
+        <span>Descarga generada.</span>
+        <a href="${url}" download="${filename}">Si no bajó automáticamente, haz clic aquí</a>
+        <button type="button" aria-label="Cerrar aviso">×</button>
+    `;
+    toast.querySelector('button').addEventListener('click', () => toast.remove());
+    document.body.appendChild(toast);
+
+    setTimeout(() => {
+        if (document.body.contains(toast)) toast.remove();
+    }, 90000);
+}
+
+function forceDownloadBlob(blob, filename) {
+    if (!blob) return false;
+
+    // Compatibilidad extra para Edge/IE antiguo.
+    if (window.navigator && typeof window.navigator.msSaveOrOpenBlob === 'function') {
+        window.navigator.msSaveOrOpenBlob(blob, filename);
+        return true;
     }
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.rel = 'noopener';
+    link.style.display = 'none';
+    document.body.appendChild(link);
+
+    // En Chrome/Edge es más confiable disparar un MouseEvent con el link dentro del DOM.
+    link.dispatchEvent(new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+        view: window
+    }));
+
+    link.remove();
+    showManualDownloadToast(url, filename);
+
+    setTimeout(() => {
+        URL.revokeObjectURL(url);
+    }, 120000);
+
+    return true;
+}
+
+async function captureElementToPNGBlob(element) {
+    if (!element) return null;
+    if (typeof html2canvas !== 'function') {
+        alert('No se pudo cargar el exportador de imágenes. Revisa tu conexión y vuelve a intentar.');
+        return null;
+    }
+
+    await document.fonts?.ready?.catch(() => null);
 
     const scale = Math.max(2, Math.min(3, window.devicePixelRatio || 1));
     const canvas = await html2canvas(element, {
         backgroundColor: '#070A14',
         scale,
         useCORS: true,
-        logging: false
+        allowTaint: false,
+        logging: false,
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: Math.max(document.documentElement.scrollWidth, element.scrollWidth, element.offsetWidth),
+        windowHeight: Math.max(document.documentElement.scrollHeight, element.scrollHeight, element.offsetHeight)
     });
 
-    const link = document.createElement('a');
-    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
-    link.download = `${filenameBase}-${stamp}.png`;
-    link.href = canvas.toDataURL('image/png');
-    link.click();
+    return canvasToPNGBlob(canvas);
 }
 
-async function exportCardLikePNG(sourceElement, filenameBase, titleText) {
-    if (!sourceElement) return;
+async function exportElementToPNG(element, filenameBase, options = {}) {
+    const shouldDownload = options.download !== false;
+    const blob = await captureElementToPNGBlob(element);
+    if (!blob) return null;
+
+    const filename = buildExportFilename(filenameBase, 'png');
+    if (shouldDownload) {
+        forceDownloadBlob(blob, filename);
+    }
+    return { blob, filename };
+}
+
+async function exportCardLikePNG(sourceElement, filenameBase, titleText, options = {}) {
+    if (!sourceElement) return null;
 
     const host = document.createElement('div');
     host.style.position = 'fixed';
@@ -445,10 +528,11 @@ async function exportCardLikePNG(sourceElement, filenameBase, titleText) {
         const title = document.createElement('div');
         title.textContent = titleText;
         title.style.color = '#ffffff';
-        title.style.fontWeight = '800';
+        title.style.fontWeight = '900';
         title.style.letterSpacing = '.04em';
         title.style.fontSize = '20px';
         title.style.margin = '0 0 14px';
+        title.style.textShadow = '0 2px 8px rgba(0,0,0,.65)';
         wrapper.appendChild(title);
     }
 
@@ -461,24 +545,58 @@ async function exportCardLikePNG(sourceElement, filenameBase, titleText) {
     document.body.appendChild(host);
 
     try {
-        await exportElementToPNG(host, filenameBase);
+        return await exportElementToPNG(host, filenameBase, options);
     } finally {
         host.remove();
     }
 }
 
-async function exportSingleGroupPNG(groupId, shouldCloseModal = true) {
+async function exportSingleGroupPNG(groupId, shouldCloseModal = true, options = {}) {
     if (shouldCloseModal) closeExportModal();
     const card = document.getElementById(`group-${groupId}`);
-    if (!card) return;
-    await exportCardLikePNG(card, `fixture-grupo-${String(groupId).toLowerCase()}`, `Fixture interactivo Mundialista 2026 · Grupo ${groupId}`);
+    if (!card) return null;
+    return exportCardLikePNG(card, `fixture-grupo-${String(groupId).toLowerCase()}`, `Fixture interactivo Mundialista 2026 · Grupo ${groupId}`, options);
 }
 
 async function exportAllGroupsPNG() {
     closeExportModal();
-    for (const group of GROUPS) {
-        await exportSingleGroupPNG(group.id, false);
-        await sleep(220);
+
+    const exportBtn = document.getElementById('btn-export');
+    if (exportBtn) {
+        exportBtn.disabled = true;
+        exportBtn.textContent = 'Generando...';
+    }
+
+    try {
+        if (typeof JSZip === 'function') {
+            const zip = new JSZip();
+
+            for (const group of GROUPS) {
+                const result = await exportSingleGroupPNG(group.id, false, { download: false });
+                if (result && result.blob) {
+                    zip.file(result.filename, result.blob);
+                }
+                await sleep(80);
+            }
+
+            const zipBlob = await zip.generateAsync({ type: 'blob' });
+            forceDownloadBlob(zipBlob, buildExportFilename('fixture-grupos-mundial-2026', 'zip'));
+            return;
+        }
+
+        alert('Tu navegador no cargó el generador ZIP. Se intentará descargar grupo por grupo; permite descargas múltiples si Chrome lo solicita.');
+        for (const group of GROUPS) {
+            await exportSingleGroupPNG(group.id, false);
+            await sleep(350);
+        }
+    } catch (err) {
+        console.error(err);
+        alert('No se pudo generar la descarga. Recarga la página y vuelve a intentar.');
+    } finally {
+        if (exportBtn) {
+            exportBtn.disabled = false;
+            exportBtn.textContent = 'Exportar';
+        }
     }
 }
 

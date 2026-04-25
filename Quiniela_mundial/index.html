@@ -213,9 +213,9 @@
         <div class="modal-content export-modal" style="max-width: 560px; height: auto;">
             <button class="modal-close-btn" id="export-close" aria-label="Cerrar">&times;</button>
             <h2 class="section-title" style="margin-top: 0;">EXPORTAR</h2>
-            <p class="export-help">Exporta tu fixture como imagen para compartirla sin dar acceso de edición. Ahora puedes bajar cada grupo por separado para que se vea más claro.</p>
+            <p class="export-help">Exporta tu fixture como imagen para compartirla sin dar acceso de edición. Puedes bajar un grupo individual o descargar todos los grupos en un solo ZIP.</p>
             <div class="export-actions">
-                <button class="knockout-stage-btn" type="button" id="export-groups-all">Exportar todos los grupos por separado</button>
+                <button class="knockout-stage-btn" type="button" id="export-groups-all">Descargar todos los grupos en ZIP</button>
                 <div class="export-group-picker">
                     <div class="export-group-picker-title">O exporta solo un grupo:</div>
                     <div id="export-group-grid" class="export-group-grid"></div>
@@ -230,6 +230,7 @@
     <script src="groups-data.js"></script>
     <script src="match-schedule.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="main.js"></script>
 
 </body>
