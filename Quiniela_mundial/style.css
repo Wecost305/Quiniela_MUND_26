@@ -648,6 +648,23 @@ a{ color: inherit; text-decoration: none; }
 
 .team-pill.placeholder{ background: rgba(255,255,255,0.04); border-style: dashed; }
 
+.team-pill.pending{
+  background: rgba(255,255,255,0.055);
+  border-style: dashed;
+  border-color: rgba(255,255,255,0.18);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+}
+.team-pill.pending .flag{
+  font-size: .9em;
+  opacity: .68;
+}
+.team-pill.pending .code{
+  color: rgba(255,255,255,0.62);
+  font-size: .74em;
+  font-weight: 800;
+  letter-spacing: .01em;
+}
+
 .team-pill .flag{ font-size: 1.3em; text-align: center; }
 
 .team-pill .code{
@@ -1792,189 +1809,5 @@ a{ color: inherit; text-decoration: none; }
 
   .team-name{
     font-size: 0.82rem;
-  }
-}
-
-
-/* =========================================================
-   Agenda dinámica: siguiente partido / próximos partidos
-   ========================================================= */
-.upcoming-panel{
-  max-width: 1400px;
-  margin: 18px auto 0;
-  padding: 16px;
-  border-radius: 22px;
-  background:
-    radial-gradient(520px 260px at 12% 10%, rgba(0,229,255,0.14), transparent 58%),
-    radial-gradient(520px 260px at 88% 0%, rgba(255,43,214,0.10), transparent 58%),
-    rgba(10, 15, 28, 0.92);
-  border: 1px solid rgba(255,255,255,0.14);
-  box-shadow: 0 22px 75px rgba(0,0,0,.45);
-  backdrop-filter: blur(10px);
-}
-
-.upcoming-panel__head{
-  display:flex;
-  justify-content:space-between;
-  align-items:flex-start;
-  gap:14px;
-  margin-bottom:10px;
-}
-
-.upcoming-kicker{
-  display:inline-flex;
-  color: rgba(0,229,255,0.95);
-  font-weight:900;
-  font-size:.76rem;
-  letter-spacing:.08em;
-  text-transform:uppercase;
-}
-
-.upcoming-title{
-  margin:2px 0 0;
-  font-family: var(--font-title);
-  font-size:2rem;
-  line-height:1;
-  letter-spacing:.03em;
-}
-
-.upcoming-now{
-  flex:0 0 auto;
-  padding:8px 10px;
-  border-radius:999px;
-  background:rgba(255,255,255,0.06);
-  border:1px solid rgba(255,255,255,0.12);
-  color:rgba(255,255,255,0.76);
-  font-weight:800;
-  font-size:.78rem;
-}
-
-.upcoming-summary{
-  margin: 0 0 12px;
-  color: rgba(255,255,255,0.74);
-  font-weight: 800;
-}
-
-.upcoming-list{
-  display:grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap:12px;
-}
-
-.upcoming-card{
-  padding:13px;
-  border-radius:18px;
-  background:rgba(255,255,255,0.055);
-  border:1px solid rgba(255,255,255,0.12);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 14px 38px rgba(0,0,0,.30);
-}
-
-.upcoming-card.is-main{
-  background:
-    linear-gradient(135deg, rgba(0,229,255,0.12), rgba(255,43,214,0.08)),
-    rgba(255,255,255,0.06);
-  border-color:rgba(0,229,255,0.24);
-}
-
-.upcoming-card__top{
-  display:flex;
-  align-items:center;
-  gap:8px;
-  flex-wrap:wrap;
-  margin-bottom:9px;
-}
-
-.upcoming-badge{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  min-width:36px;
-  height:22px;
-  padding:0 8px;
-  border-radius:999px;
-  color:#fff;
-  background:rgba(0,229,255,0.18);
-  border:1px solid rgba(0,229,255,0.26);
-  font-weight:900;
-  font-size:.74rem;
-}
-
-.upcoming-phase,
-.upcoming-countdown{
-  color:rgba(255,255,255,0.72);
-  font-weight:900;
-  font-size:.76rem;
-}
-
-.upcoming-countdown{
-  margin-left:auto;
-  color:rgba(182,255,0,0.90);
-}
-
-.upcoming-teams{
-  display:grid;
-  grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
-  gap:8px;
-  align-items:center;
-  color:rgba(255,255,255,0.94);
-  font-weight:900;
-  font-size:1rem;
-}
-
-.upcoming-teams span{
-  min-width:0;
-  overflow:hidden;
-  text-overflow:ellipsis;
-  white-space:nowrap;
-}
-
-.upcoming-teams span:first-child{ text-align:right; }
-.upcoming-teams span:last-child{ text-align:left; }
-.upcoming-teams strong{
-  color:rgba(0,229,255,0.92);
-  font-size:.78rem;
-}
-
-.upcoming-meta{
-  display:flex;
-  flex-direction:column;
-  gap:3px;
-  margin:9px 0 10px;
-  color:rgba(255,255,255,0.62);
-  font-size:.76rem;
-  font-weight:800;
-  line-height:1.25;
-}
-
-.upcoming-empty{
-  padding:12px;
-  border-radius:14px;
-  background:rgba(255,255,255,0.05);
-  color:rgba(255,255,255,0.74);
-  font-weight:800;
-  text-align:center;
-}
-
-.upcoming-jump{
-  width:100%;
-  padding:9px 12px;
-  border-radius:12px;
-  font-size:.78rem;
-}
-
-@media (max-width: 720px){
-  .upcoming-panel{
-    margin:14px 10px 0;
-    padding:14px;
-  }
-  .upcoming-panel__head{
-    flex-direction:column;
-  }
-  .upcoming-now{
-    width:100%;
-    text-align:center;
-  }
-  .upcoming-title{
-    font-size:1.65rem;
   }
 }

@@ -214,6 +214,67 @@ function renderTeamName(code, side) {
     </span>`;
 }
 
+
+const BRACKET_PENDING_LABELS = {
+    '16-1':  { home: '2º Grupo A', away: '2º Grupo B' },
+    '16-2':  { home: '1º Grupo E', away: '3º A/B/C/D/F' },
+    '16-3':  { home: '1º Grupo F', away: '2º Grupo C' },
+    '16-4':  { home: '1º Grupo C', away: '2º Grupo F' },
+    '16-5':  { home: '1º Grupo I', away: '3º C/D/F/G/H' },
+    '16-6':  { home: '2º Grupo E', away: '2º Grupo I' },
+    '16-7':  { home: '1º Grupo A', away: '3º C/E/F/H/I' },
+    '16-8':  { home: '1º Grupo L', away: '3º E/H/I/J/K' },
+    '16-9':  { home: '1º Grupo D', away: '3º B/E/F/I/J' },
+    '16-10': { home: '1º Grupo G', away: '3º A/E/H/I/J' },
+    '16-11': { home: '2º Grupo K', away: '2º Grupo L' },
+    '16-12': { home: '1º Grupo H', away: '2º Grupo J' },
+    '16-13': { home: '1º Grupo B', away: '3º E/F/G/I/J' },
+    '16-14': { home: '1º Grupo J', away: '2º Grupo H' },
+    '16-15': { home: '1º Grupo K', away: '3º D/E/I/J/L' },
+    '16-16': { home: '2º Grupo D', away: '2º Grupo G' },
+    '8-1':   { home: 'Ganador M74', away: 'Ganador M77' },
+    '8-2':   { home: 'Ganador M73', away: 'Ganador M75' },
+    '8-3':   { home: 'Ganador M76', away: 'Ganador M78' },
+    '8-4':   { home: 'Ganador M79', away: 'Ganador M80' },
+    '8-5':   { home: 'Ganador M83', away: 'Ganador M84' },
+    '8-6':   { home: 'Ganador M81', away: 'Ganador M82' },
+    '8-7':   { home: 'Ganador M86', away: 'Ganador M88' },
+    '8-8':   { home: 'Ganador M85', away: 'Ganador M87' },
+    '4-1':   { home: 'Ganador M89', away: 'Ganador M90' },
+    '4-2':   { home: 'Ganador M91', away: 'Ganador M92' },
+    '4-3':   { home: 'Ganador M93', away: 'Ganador M94' },
+    '4-4':   { home: 'Ganador M95', away: 'Ganador M96' },
+    '2-1':   { home: 'Ganador M97', away: 'Ganador M98' },
+    '2-2':   { home: 'Ganador M99', away: 'Ganador M100' },
+    '1-1':   { home: 'Ganador M101', away: 'Ganador M102' },
+    '3-1':   { home: 'Perdedor M101', away: 'Perdedor M102' }
+};
+
+function getPendingBracketLabel(matchId, position, fallback = 'Pendiente') {
+    return BRACKET_PENDING_LABELS[matchId]?.[position] || fallback;
+}
+
+function setPendingBracketTeam(matchId, position, label) {
+    const matchEl = document.querySelector(`[data-match-id="${matchId}"]`);
+    if (!matchEl) return;
+    const pill = matchEl.querySelector(`.team-pill[data-team-pos="${position}"]`);
+    if (!pill) return;
+
+    const safeLabel = escapeHTML(label || getPendingBracketLabel(matchId, position));
+    pill.classList.add('placeholder', 'pending');
+    pill.classList.remove('loser');
+    delete pill.dataset.teamCode;
+    pill.title = label || getPendingBracketLabel(matchId, position);
+    pill.innerHTML = `<span class="flag">⏳</span><span class="code">${safeLabel}</span>`;
+}
+
+function seedBracketPendingLabels() {
+    Object.entries(BRACKET_PENDING_LABELS).forEach(([matchId, positions]) => {
+        if (positions.home) setPendingBracketTeam(matchId, 'home', positions.home);
+        if (positions.away) setPendingBracketTeam(matchId, 'away', positions.away);
+    });
+}
+
 const THIRD_ASSIGNMENT_SLOTS = [
     { matchId: '16-2',  matchNo: 'M74', winnerGroup: 'E', label: '1E vs 3º A/B/C/D/F', allowed: ['A','B','C','D','F'] },
     { matchId: '16-5',  matchNo: 'M77', winnerGroup: 'I', label: '1I vs 3º C/D/F/G/H', allowed: ['C','D','F','G','H'] },
@@ -1552,7 +1613,7 @@ function updateNextMatch(nextMatchId, position, teamCode) {
 
     // --- Lógica para el CAMPEÓN (se muestra completo) ---
     if (nextMatchId === 'champion') {
-        nextMatchEl.classList.remove('placeholder');
+        nextMatchEl.classList.remove('placeholder', 'pending');
         // Mostramos bandera y nombre completo
         nextMatchEl.innerHTML = `<span class="flag">${TEAMS_DATA[teamCode].flag}</span><span class="code">${TEAMS_DATA[teamCode].name}</span>`;
         return;
@@ -1560,7 +1621,8 @@ function updateNextMatch(nextMatchId, position, teamCode) {
 
     const targetPill = nextMatchEl.querySelector(`.team-pill[data-team-pos="${position}"]`);
     if (targetPill) {
-        targetPill.classList.remove('placeholder');
+        targetPill.classList.remove('placeholder', 'pending');
+        targetPill.removeAttribute('title');
         targetPill.dataset.teamCode = teamCode;
         // ¡CAMBIO CLAVE! Mostramos solo la bandera y el nombre completo. El score se añadirá después.
         targetPill.innerHTML = `<span class="flag">${TEAMS_DATA[teamCode].flag}</span><span class="code">${TEAMS_DATA[teamCode].name}</span>`;
@@ -1759,24 +1821,25 @@ function getQualifiedTeams({ finishedGroups } = {}) {
 function populateBracketFIFA(qualified) {
     // Siempre limpiamos todo el bracket (para que recalcular no deje basura)
     clearBracket();
+    // Mostramos etiquetas pendientes para que el usuario entienda qué lugar llenará cada espacio.
+    seedBracketPendingLabels();
 
     // --------------------------------------------------
     // 1) Sembrado oficial Round of 32 (Art. 12.6)
     // --------------------------------------------------
 
-    // Helper: set a real team
+    // Helper: si ya existe el clasificado, lo pinta; si no, deja la etiqueta pendiente.
     const setTeam = (matchId, pos, code) => {
-        if (!code) return;
+        if (!code) {
+            setPendingBracketTeam(matchId, pos, getPendingBracketLabel(matchId, pos));
+            return;
+        }
         updateNextMatch(matchId, pos, code);
     };
 
-    // Helper: set a placeholder "Mejor 3º ..." (si aún no se puede resolver)
+    // Helper: placeholder de terceros hasta que terminen los 12 grupos y se resuelva el cruce.
     const setThirdPlaceholder = (matchId, pos, label) => {
-        const pseudoCode = `TBD_${label}`;
-        if (!TEAMS_DATA[pseudoCode]) {
-            TEAMS_DATA[pseudoCode] = { name: `Mejor 3º (${label})`, flag: '⏳' };
-        }
-        updateNextMatch(matchId, pos, pseudoCode);
+        setPendingBracketTeam(matchId, pos, `3º ${label}`);
     };
 
     // --- Matches fijos (runner-up / winner)
@@ -2063,15 +2126,11 @@ function clearBracket() {
     document.querySelectorAll('.bracket-container-topdown .match-container').forEach(match => {
         // Limpiar estados visuales
         match.querySelectorAll('.team-pill').forEach(pill => {
-            pill.classList.remove('loser');
-            if (!pill.classList.contains('placeholder')) {
-                pill.classList.add('placeholder');
-                pill.innerHTML = '';
-                delete pill.dataset.teamCode;
-            } else {
-                pill.innerHTML = '';
-                delete pill.dataset.teamCode;
-            }
+            pill.classList.remove('loser', 'pending');
+            pill.classList.add('placeholder');
+            pill.innerHTML = '';
+            pill.removeAttribute('title');
+            delete pill.dataset.teamCode;
             const scoreInput = pill.querySelector('.score');
             if (scoreInput) scoreInput.remove();
         });
