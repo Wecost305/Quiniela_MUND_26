@@ -1,56 +1,124 @@
-const { getStore, connectLambda } = require('@netlify/blobs');
+const crypto = require('crypto');
 const { json } = require('./_common');
 
-function getConfiguredStore(event) {
-  try { connectLambda(event); } catch (e) { /* ignore */ }
+const SESSION_PREFIX = 'st3';
 
-  const siteID = (process.env.BLOBS_SITE_ID || '').trim();
-  const token = (process.env.BLOBS_TOKEN || '').trim();
+function sha256Hex(s) {
+  return crypto.createHash('sha256').update(String(s || '')).digest('hex');
+}
 
-  return getStore({ name: 'qm2026', siteID, token });
+function safeEqual(a, b) {
+  const bufA = Buffer.from(String(a || ''));
+  const bufB = Buffer.from(String(b || ''));
+  return bufA.length === bufB.length && crypto.timingSafeEqual(bufA, bufB);
+}
+
+function getInviteSecret() {
+  return String(process.env.INVITE_SECRET || process.env.ADMIN_KEY || '')
+    .trim()
+    .normalize('NFKC');
+}
+
+function base64UrlToString(value) {
+  const normalized = String(value || '').replace(/-/g, '+').replace(/_/g, '/');
+  const padding = normalized.length % 4 ? '='.repeat(4 - (normalized.length % 4)) : '';
+  return Buffer.from(normalized + padding, 'base64').toString('utf8');
+}
+
+function signValue(value, secret, scope = 'session') {
+  return crypto
+    .createHmac('sha256', secret)
+    .update(`${scope}:${value}`)
+    .digest('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+function verifySignedSession(sessionId, deviceId) {
+  const value = String(sessionId || '').trim();
+  if (!value.startsWith(`${SESSION_PREFIX}.`)) return null;
+
+  const parts = value.split('.');
+  if (parts.length !== 3) return null;
+
+  const [, payloadB64, signature] = parts;
+  const secret = getInviteSecret();
+  if (!secret) throw new Error('Falta configurar ADMIN_KEY o INVITE_SECRET en Netlify.');
+
+  const expected = signValue(payloadB64, secret, 'session');
+  if (!safeEqual(signature, expected)) return { error: json(401, { error: 'Sesión inválida. Vuelve a activar tu acceso.' }) };
+
+  let payload;
+  try {
+    payload = JSON.parse(base64UrlToString(payloadB64));
+  } catch (e) {
+    return { error: json(401, { error: 'Sesión inválida. Vuelve a activar tu acceso.' }) };
+  }
+
+  if (!payload || payload.v !== 3 || !payload.userId || !payload.deviceHash) {
+    return { error: json(401, { error: 'Sesión inválida. Vuelve a activar tu acceso.' }) };
+  }
+
+  const deviceHash = sha256Hex(deviceId);
+  if (!safeEqual(payload.deviceHash, deviceHash)) {
+    return { error: json(403, { error: 'Esta sesión pertenece a otro dispositivo.' }) };
+  }
+
+  return { ok: true, userId: String(payload.userId) };
+}
+
+async function tryVerifyLegacyBlobSession(event, sessionId, deviceId) {
+  let blobs;
+  try {
+    blobs = require('@netlify/blobs');
+  } catch (e) {
+    return null;
+  }
+
+  const { getStore, connectLambda } = blobs;
+  if (typeof getStore !== 'function') return null;
+  if (typeof connectLambda === 'function') connectLambda(event);
+
+  const store = getStore({ name: 'qm2026', consistency: 'strong' });
+  const session = await store.get(`sessions/${sessionId}`, { type: 'json', consistency: 'strong' });
+  if (!session) return { error: json(401, { error: 'Sesión inválida. Vuelve a activar tu acceso.' }) };
+
+  const deviceHash = sha256Hex(deviceId);
+  if (session.deviceHash !== deviceHash) {
+    return { error: json(403, { error: 'Esta sesión pertenece a otro dispositivo.' }) };
+  }
+
+  await store.setJSON(`sessions/${sessionId}`, { ...session, lastSeenAt: Date.now() });
+  return { ok: true, userId: session.userId };
 }
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Method Not Allowed' });
 
-<<<<<<< HEAD
   let body = {};
   try { body = JSON.parse(event.body || '{}'); } catch (e) { body = {}; }
-=======
-  const siteID = (process.env.BLOBS_SITE_ID || '').trim();
-  const tokenEnv = (process.env.BLOBS_TOKEN || '').trim();
-  if (!siteID || !tokenEnv) {
-    return json(500, {
-      error: 'Faltan variables de entorno para Blobs.',
-      detail: 'Configura BLOBS_SITE_ID y BLOBS_TOKEN en Netlify (Environment variables).'
-    });
-  }
->>>>>>> 5a054cb109457c201f198d5ab9dc7cba51e27da8
+
+  const sessionId = String(body.sessionId || '').trim();
+  const deviceId = String(body.deviceId || '').trim();
+
+  if (!sessionId) return json(400, { error: 'sessionId requerido.' });
+  if (!deviceId) return json(400, { error: 'deviceId requerido.' });
 
   try {
-<<<<<<< HEAD
-    if (typeof connectLambda === 'function') connectLambda(event);
-    const store = getStore({ name: 'qm2026', consistency: 'strong' });
-=======
-    const store = getConfiguredStore(event);
->>>>>>> 5a054cb109457c201f198d5ab9dc7cba51e27da8
+    const signed = verifySignedSession(sessionId, deviceId);
+    if (signed && signed.error) return signed.error;
+    if (signed) return json(200, signed);
 
-    const body = JSON.parse(event.body || '{}');
+    const legacy = await tryVerifyLegacyBlobSession(event, sessionId, deviceId);
+    if (legacy && legacy.error) return legacy.error;
+    if (legacy) return json(200, legacy);
 
-    // Compatibilidad: acepta sessionId (frontend) o sessionToken (viejo)
-    const sessionId = String(body.sessionId || body.sessionToken || '').trim();
-    const deviceId = String(body.deviceId || '').trim();
-
-    if (!sessionId) return json(400, { error: 'Falta sessionId.' });
-    if (!deviceId) return json(400, { error: 'Falta deviceId.' });
-
-    const session = await store.get(`sessions/${sessionId}`, { type: 'json' });
-
-    if (!session) return json(401, { error: 'Sesión inválida.' });
-    if (session.deviceId !== deviceId) return json(401, { error: 'Sesión no coincide con este dispositivo.' });
-
-    return json(200, { ok: true, userId: session.userId });
+    return json(401, { error: 'Sesión inválida. Vuelve a activar tu acceso.' });
   } catch (e) {
-    return json(500, { error: 'Error interno al verificar sesión.', detail: String(e?.message || e) });
+    return json(500, {
+      error: 'Error interno al validar sesión.',
+      detail: String(e && e.message ? e.message : e)
+    });
   }
 };
