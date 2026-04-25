@@ -1,5 +1,5 @@
 // =================================================================================
-// === QUINIELA MUNDIAL 2026 - CÓDIGO JAVASCRIPT MAESTRO, FINAL Y VERIFICADO      ===
+// === FIXTURE INTERACTIVO MUNDIALISTA 2026 - CÓDIGO JAVASCRIPT MAESTRO      ===
 // =================================================================================
 
 // --- CONFIGURACIÓN GLOBAL ---
@@ -381,7 +381,7 @@ async function exportElementToPNG(element, filenameBase) {
 async function exportGroupsPNG() {
     closeExportModal();
     const groupsContainer = document.querySelector('.main-content');
-    await exportElementToPNG(groupsContainer, 'quiniela-grupos');
+    await exportElementToPNG(groupsContainer, 'fixture-grupos');
 }
 
 async function exportBracketPNG() {
@@ -409,7 +409,7 @@ async function exportBracketPNG() {
     document.body.appendChild(tmp);
 
     try {
-        await exportElementToPNG(clone, 'quiniela-eliminatoria');
+        await exportElementToPNG(clone, 'fixture-eliminatoria');
     } finally {
         tmp.remove();
     }
@@ -545,7 +545,7 @@ function initApp() {
     // Verificamos si el usuario ya tiene un nombre guardado
     const savedState = JSON.parse(localStorage.getItem(storageKey));
     if (savedState && savedState.userName) {
-        document.getElementById('user-name-display').textContent = `Quiniela de: ${savedState.userName}`;
+        document.getElementById('user-name-display').textContent = `Fixture de: ${savedState.userName}`;
     } else {
         // Si no hay nombre, mostramos el modal para que lo ingrese.
         document.getElementById('name-modal').style.display = 'flex';
@@ -554,47 +554,186 @@ function initApp() {
 }
 
 
+
+// --- Calendario y pronósticos personales ---
+function getGroupSchedule(groupId, pairIndex) {
+    return window.MATCH_SCHEDULE?.groups?.[groupId]?.[Number(pairIndex)] || null;
+}
+
+function getBracketSchedule(matchId) {
+    return window.MATCH_SCHEDULE?.bracket?.[matchId] || null;
+}
+
+function formatScheduleHTML(schedule) {
+    if (!schedule) return '<div class="match-schedule is-pending">Fecha y hora por confirmar</div>';
+    return [
+        '<div class="match-schedule">',
+            '<span class="match-schedule__badge">M' + schedule.no + '</span>',
+            '<span>' + schedule.date + ' · ' + schedule.time + '</span>',
+            '<small>' + schedule.venue + ' · ' + schedule.city + '</small>',
+        '</div>'
+    ].join('');
+}
+
+function getMatchKey(matchEl) {
+    return matchEl.dataset.team1 + '-' + matchEl.dataset.team2;
+}
+
+function getScorePairFromInputs(inputs) {
+    if (!inputs || inputs.length < 2) return null;
+    if (inputs[0].value === '' || inputs[1].value === '') return null;
+    const home = parseInt(inputs[0].value, 10);
+    const away = parseInt(inputs[1].value, 10);
+    if (Number.isNaN(home) || Number.isNaN(away)) return null;
+    return { home, away };
+}
+
+function getGroupMatchPrediction(matchEl) {
+    return getScorePairFromInputs(matchEl.querySelectorAll('.prediction-input'));
+}
+
+function getGroupMatchResult(matchEl) {
+    return getScorePairFromInputs(matchEl.querySelectorAll('.score-input'));
+}
+
+function getOutcome(score) {
+    if (!score) return null;
+    if (score.home > score.away) return 'home';
+    if (score.home < score.away) return 'away';
+    return 'draw';
+}
+
+function calculatePredictionPoints(prediction, result) {
+    if (!prediction || !result) return null;
+    if (prediction.home === result.home && prediction.away === result.away) {
+        return { points: 3, type: 'exact', label: 'Marcador exacto' };
+    }
+    if (getOutcome(prediction) === getOutcome(result)) {
+        return { points: 1, type: 'outcome', label: 'Acertaste ganador/empate' };
+    }
+    return { points: 0, type: 'miss', label: 'No acertaste' };
+}
+
+function renderPredictionFeedback(matchEl) {
+    if (!matchEl) return;
+    const feedback = matchEl.querySelector('.prediction-feedback');
+    if (!feedback) return;
+
+    const prediction = getGroupMatchPrediction(matchEl);
+    const result = getGroupMatchResult(matchEl);
+
+    feedback.className = 'prediction-feedback';
+    if (!prediction) {
+        feedback.textContent = 'Agrega tu pronóstico antes del partido.';
+        feedback.classList.add('is-empty');
+        return;
+    }
+    if (!result) {
+        feedback.textContent = 'Pronóstico guardado: ' + prediction.home + ' - ' + prediction.away;
+        feedback.classList.add('is-pending');
+        return;
+    }
+
+    const score = calculatePredictionPoints(prediction, result);
+    feedback.textContent = score.label + ' · ' + score.points + ' punto' + (score.points === 1 ? '' : 's');
+    feedback.classList.add('is-' + score.type);
+}
+
+function updateAllPredictionFeedback() {
+    document.querySelectorAll('.group-card .match-grid').forEach(renderPredictionFeedback);
+}
+
+function updatePredictionSummary() {
+    const summary = { total: 0, evaluated: 0, exact: 0, outcome: 0, miss: 0, points: 0 };
+
+    document.querySelectorAll('.group-card .match-grid').forEach(matchEl => {
+        const prediction = getGroupMatchPrediction(matchEl);
+        const result = getGroupMatchResult(matchEl);
+        if (prediction) summary.total += 1;
+        const score = calculatePredictionPoints(prediction, result);
+        if (score) {
+            summary.evaluated += 1;
+            summary.points += score.points;
+            if (score.type === 'exact') summary.exact += 1;
+            if (score.type === 'outcome') summary.outcome += 1;
+            if (score.type === 'miss') summary.miss += 1;
+        }
+    });
+
+    const set = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = String(value);
+    };
+    set('pred-total', summary.total);
+    set('pred-evaluated', summary.evaluated);
+    set('pred-exact', summary.exact);
+    set('pred-points', summary.points);
+}
+
+function applyBracketSchedules() {
+    document.querySelectorAll('.bracket-container-topdown .match-container').forEach(match => {
+        const schedule = getBracketSchedule(match.dataset.matchId);
+        if (!schedule || match.querySelector('.bracket-schedule')) return;
+        const scheduleEl = document.createElement('div');
+        scheduleEl.className = 'bracket-schedule';
+        scheduleEl.innerHTML = '<span>M' + schedule.no + '</span> ' + schedule.date + ' · ' + schedule.time + '<small>' + schedule.venue + ' · ' + schedule.city + '</small>';
+        match.insertBefore(scheduleEl, match.firstChild);
+    });
+}
+
 // --- GENERACIÓN DE HTML ---
 function generateGroupsHTML() {
     const container = document.getElementById('groups-container');
-    container.innerHTML = groupsData.map(group => `
-        <div class="group-card" id="group-${group.id}" data-group-id="${group.id}">
-            <div class="group-header" style="background-image: linear-gradient(45deg, ${group.color1}, ${group.color2});">
-                <span>GRUPO ${group.id}</span>
-                <button class="reset-group-btn" title="Limpiar marcadores del grupo">&#x21bb;</button>
-            </div>
-            <div class="group-matches">
-                ${[[0, 1], [2, 3], [0, 2], [1, 3], [0, 3], [1, 2]].map(([i, j]) => {
-        const team1 = group.codes[i], team2 = group.codes[j];
-        return `
-                    <div class="match-grid" data-team1="${team1}" data-team2="${team2}">
-                        <span class="team-name local">
-  ${TEAMS_DATA[team1].name}
-  <span class="team-flag">${TEAMS_DATA[team1].flag}</span>
-</span>
+    const pairs = [[0, 1], [2, 3], [0, 2], [1, 3], [0, 3], [1, 2]];
 
-<input type="number" min="0" max="20" step="1" inputmode="numeric" class="score-input">
-<span class="match-separator">-</span>
-<input type="number" min="0" max="20" step="1" inputmode="numeric" class="score-input">
+    container.innerHTML = groupsData.map(group => {
+        const matchesHtml = pairs.map(([i, j], pairIndex) => {
+            const team1 = group.codes[i];
+            const team2 = group.codes[j];
+            const schedule = getGroupSchedule(group.id, pairIndex);
+            return [
+                '<div class="match-grid" data-team1="' + team1 + '" data-team2="' + team2 + '" data-pair-index="' + pairIndex + '">',
+                    formatScheduleHTML(schedule),
+                    '<div class="match-section-label">Resultado final</div>',
+                    '<div class="match-score-row result-score-row">',
+                        '<span class="team-name local"><span>' + TEAMS_DATA[team1].name + '</span><span class="team-flag">' + TEAMS_DATA[team1].flag + '</span></span>',
+                        '<input type="number" min="0" max="20" step="1" inputmode="numeric" class="score-input" aria-label="Resultado ' + TEAMS_DATA[team1].name + '">',
+                        '<span class="match-separator">-</span>',
+                        '<input type="number" min="0" max="20" step="1" inputmode="numeric" class="score-input" aria-label="Resultado ' + TEAMS_DATA[team2].name + '">',
+                        '<span class="team-name visitor"><span class="team-flag">' + TEAMS_DATA[team2].flag + '</span><span>' + TEAMS_DATA[team2].name + '</span></span>',
+                    '</div>',
+                    '<div class="prediction-panel">',
+                        '<div class="prediction-title">Mi pronóstico</div>',
+                        '<div class="match-score-row prediction-score-row">',
+                            '<span class="team-name local compact">' + TEAMS_DATA[team1].flag + ' ' + TEAMS_DATA[team1].name + '</span>',
+                            '<input type="number" min="0" max="20" step="1" inputmode="numeric" class="prediction-input" aria-label="Pronóstico ' + TEAMS_DATA[team1].name + '">',
+                            '<span class="match-separator">-</span>',
+                            '<input type="number" min="0" max="20" step="1" inputmode="numeric" class="prediction-input" aria-label="Pronóstico ' + TEAMS_DATA[team2].name + '">',
+                            '<span class="team-name visitor compact">' + TEAMS_DATA[team2].flag + ' ' + TEAMS_DATA[team2].name + '</span>',
+                        '</div>',
+                        '<div class="prediction-feedback is-empty">Agrega tu pronóstico antes del partido.</div>',
+                    '</div>',
+                '</div>'
+            ].join('');
+        }).join('');
 
-<span class="team-name visitor">
-  <span class="team-flag">${TEAMS_DATA[team2].flag}</span>
-  ${TEAMS_DATA[team2].name}
-</span>
-                    </div>`;
-    }).join('')}
-            </div>
-            <div class="group-view-toggle-wrap">
-                <button class="group-view-toggle" type="button" aria-pressed="false">Ver tabla</button>
-            </div>
-            <table class="standings-table">
-                <thead><tr><th>Eq</th><th>Pts</th><th>PJ</th><th>G</th><th>E</th><th>P</th><th>GF</th><th>GC</th></tr></thead>
-                <tbody>
-                    ${group.codes.map(code => `<tr data-team-code="${code}"><td>${TEAMS_DATA[code].flag} ${code}</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td></tr>`).join('')}
-                </tbody>
-            </table>
-        </div>
-    `).join('');
+        const rowsHtml = group.codes.map(code => '<tr data-team-code="' + code + '"><td>' + TEAMS_DATA[code].flag + ' ' + code + '</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td></tr>').join('');
+
+        return [
+            '<div class="group-card" id="group-' + group.id + '" data-group-id="' + group.id + '">',
+                '<div class="group-header" style="background-image: linear-gradient(45deg, ' + group.color1 + ', ' + group.color2 + ');">',
+                    '<span>GRUPO ' + group.id + '</span>',
+                    '<button class="reset-group-btn" title="Limpiar marcadores y pronósticos del grupo">&#x21bb;</button>',
+                '</div>',
+                '<div class="group-matches">' + matchesHtml + '</div>',
+                '<div class="group-view-toggle-wrap"><button class="group-view-toggle" type="button" aria-pressed="false">Ver tabla</button></div>',
+                '<table class="standings-table">',
+                    '<thead><tr><th>Eq</th><th>Pts</th><th>PJ</th><th>G</th><th>E</th><th>P</th><th>GF</th><th>GC</th></tr></thead>',
+                    '<tbody>' + rowsHtml + '</tbody>',
+                '</table>',
+            '</div>'
+        ].join('');
+    }).join('');
 }
 
 function generateBracketHTML() {
@@ -700,7 +839,8 @@ function generateBracketHTML() {
         </div>
     `;
 
-    // Añadimos un contenedor de meta (penales) por partido (no interfiere con tu HTML actual)
+    // Añadimos calendario y un contenedor de meta (penales) por partido.
+    applyBracketSchedules();
     container.querySelectorAll('.match-container').forEach(m => {
         if (!m.querySelector('.match-meta')) {
             const meta = document.createElement('div');
@@ -749,18 +889,34 @@ function initializeEventListeners() {
     document.getElementById('groups-container').addEventListener('input', (e) => {
         if (e.target.classList.contains('score-input')) {
             sanitizeScoreInput(e.target);
-            validateMatchInputs(e.target.closest('.match-grid'));
+            const match = e.target.closest('.match-grid');
+            validateMatchInputs(match);
             markDirty();
             updateAllCalculations();
             updateProgressUI();
+            renderPredictionFeedback(match);
+            updatePredictionSummary();
+        }
+
+        if (e.target.classList.contains('prediction-input')) {
+            sanitizeScoreInput(e.target);
+            const match = e.target.closest('.match-grid');
+            markDirty();
+            renderPredictionFeedback(match);
+            updatePredictionSummary();
+            saveStateToStorage();
         }
     });
     document.getElementById('groups-container').addEventListener('click', (e) => {
         if (e.target.classList.contains('reset-group-btn')) {
             const card = e.target.closest('.group-card');
-            card.querySelectorAll('.score-input').forEach(input => {
+            card.querySelectorAll('.score-input, .prediction-input').forEach(input => {
                 input.value = '';
                 input.classList.remove('input-invalid');
+            });
+            card.querySelectorAll('.prediction-feedback').forEach(feedback => {
+                feedback.className = 'prediction-feedback is-empty';
+                feedback.textContent = 'Agrega tu pronóstico antes del partido.';
             });
             markDirty();
             updateAllCalculations();
@@ -795,7 +951,7 @@ function initializeEventListeners() {
         const userName = userNameInput.value.trim();
 
         if (userName) {
-            document.getElementById('user-name-display').textContent = `Quiniela de: ${userName}`;
+            document.getElementById('user-name-display').textContent = `Fixture de: ${userName}`;
 
             // Guardamos el nombre junto con el resto de los datos
             const currentState = JSON.parse(localStorage.getItem(storageKey)) || {};
@@ -816,7 +972,7 @@ function initializeEventListeners() {
 
     const btnReset = document.getElementById('btn-reset-all');
     if (btnReset) btnReset.addEventListener('click', () => {
-        const typed = prompt('Esto borrará tu quiniela en este dispositivo. Escribe BORRAR para confirmar:');
+        const typed = prompt('Esto borrará tu fixture en este dispositivo. Escribe BORRAR para confirmar:');
         if (typed === 'BORRAR') {
             localStorage.removeItem(storageKey);
             location.reload();
@@ -1063,6 +1219,8 @@ function updateAllCalculations() {
     // Estadísticas globales
     updateGlobalStats();
 
+    updateAllPredictionFeedback();
+    updatePredictionSummary();
     updateProgressUI();
     saveStateToStorage();
 }
@@ -1419,6 +1577,7 @@ function saveStateToStorage() {
     const newState = {
         userName: currentState.userName, // Mantenemos el nombre de usuario existente.
         groups: {},
+        predictions: {},
         bracket: {},
         bracketMeta: {}
     };
@@ -1427,12 +1586,17 @@ function saveStateToStorage() {
     document.querySelectorAll('.group-card').forEach(card => {
         const groupId = card.dataset.groupId;
         newState.groups[groupId] = {};
+        newState.predictions[groupId] = {};
         card.querySelectorAll('.match-grid').forEach(match => {
-            const matchKey = `${match.dataset.team1}-${match.dataset.team2}`;
+            const matchKey = getMatchKey(match);
             const scores = Array.from(match.querySelectorAll('.score-input')).map(i => i.value);
+            const predictions = Array.from(match.querySelectorAll('.prediction-input')).map(i => i.value);
             // Guardamos solo si hay datos para no llenar el storage de vacíos
             if (scores[0] !== '' || scores[1] !== '') {
                 newState.groups[groupId][matchKey] = scores;
+            }
+            if (predictions[0] !== '' || predictions[1] !== '') {
+                newState.predictions[groupId][matchKey] = predictions;
             }
         });
     });
@@ -1479,6 +1643,26 @@ function loadStateFromStorage() {
                         const inputs = match.querySelectorAll('.score-input');
                         inputs[0].value = score1;
                         inputs[1].value = score2;
+                    }
+                });
+            }
+        });
+    }
+
+    // Cargar pronósticos personales
+    if (savedState && savedState.predictions) {
+        document.querySelectorAll('.group-card').forEach(card => {
+            const groupId = card.dataset.groupId;
+            if (savedState.predictions[groupId]) {
+                card.querySelectorAll('.match-grid').forEach(match => {
+                    const matchKey = getMatchKey(match);
+                    if (savedState.predictions[groupId][matchKey]) {
+                        const [pred1, pred2] = savedState.predictions[groupId][matchKey];
+                        const inputs = match.querySelectorAll('.prediction-input');
+                        if (inputs.length === 2) {
+                            inputs[0].value = pred1;
+                            inputs[1].value = pred2;
+                        }
                     }
                 });
             }
@@ -1536,6 +1720,9 @@ function loadStateFromStorage() {
             });
         });
     }
+
+    updateAllPredictionFeedback();
+    updatePredictionSummary();
 
     isLoading = false; // --- Desactivamos la bandera de carga al finalizar ---
 }

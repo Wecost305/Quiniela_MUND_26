@@ -3,98 +3,87 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin — Quiniela Mundial 2026</title>
+  <title>Admin — Fixture interactivo Mundialista 2026</title>
   <link rel="stylesheet" href="style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Teko:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
     body{ min-height: 100vh; display:flex; align-items:center; justify-content:center; padding: 18px; }
-    .admin-card{
-      width:min(720px,100%);
-      background: rgba(255,255,255,.06);
-      border:1px solid var(--border);
-      border-radius: var(--radius-lg);
-      box-shadow: var(--shadow-soft);
-      padding: 18px 18px;
-    }
+    .admin-card{ width:min(920px,100%); background: rgba(255,255,255,.06); border:1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-soft); padding: 18px; }
     .admin-title{ font-family: var(--font-title); font-size: 2.3rem; letter-spacing: .6px; }
     .admin-sub{ color: var(--muted); margin-top: 6px; line-height:1.35; }
-    .admin-row{ display:flex; gap: 10px; margin-top: 14px; align-items: stretch; }
-    .admin-row input{
-      flex:1;
-      padding: 12px 12px;
-      border-radius: var(--radius-md);
-      border:1px solid var(--border);
-      background: rgba(255,255,255,.06);
-      color: var(--text);
-      outline: none;
-    }
-    .admin-row input:focus{
-      border-color: rgba(0,229,255,.45);
-      box-shadow: 0 0 0 3px rgba(0,229,255,.12);
-    }
+    .admin-row{ display:grid; grid-template-columns: 1fr 150px auto; gap: 10px; margin-top: 14px; align-items: stretch; }
+    .admin-row input{ padding: 12px; border-radius: var(--radius-md); border:1px solid var(--border); background: rgba(255,255,255,.06); color: var(--text); outline: none; }
+    .admin-row input:focus{ border-color: rgba(0,229,255,.45); box-shadow: 0 0 0 3px rgba(0,229,255,.12); }
     .admin-actions{ margin-top: 12px; display:flex; gap: 10px; flex-wrap: wrap; }
-    .admin-out{
-      margin-top: 14px;
-      padding: 12px;
-      border-radius: var(--radius-md);
-      border: 1px solid var(--border);
-      background: rgba(0,0,0,.25);
-      overflow-wrap: anywhere;
-    }
+    .admin-out{ margin-top: 14px; padding: 12px; border-radius: var(--radius-md); border: 1px solid var(--border); background: rgba(0,0,0,.25); overflow-wrap: anywhere; }
     .admin-err{ margin-top: 10px; color: rgba(230,29,37,.95); font-weight: 600; min-height: 22px; }
-    .chip{
-      display:inline-flex; align-items:center; gap:8px;
-      padding: 6px 10px; border-radius: 999px;
-      background: rgba(255,255,255,.06); border:1px solid var(--border);
-      color: rgba(255,255,255,.82); font-size: .92rem;
-    }
-    @media (max-width: 520px){
-      .admin-row{ flex-direction: column; }
-      .admin-actions .knockout-stage-btn{ width: 100%; }
-    }
+    .chip{ display:inline-flex; align-items:center; gap:8px; padding: 6px 10px; border-radius: 999px; background: rgba(255,255,255,.06); border:1px solid var(--border); color: rgba(255,255,255,.82); font-size: .92rem; }
+    .token-tools{ margin-top: 10px; display:flex; gap:10px; flex-wrap:wrap; }
+    .token-list{ margin-top: 12px; max-height: 360px; overflow:auto; border:1px solid rgba(255,255,255,.10); border-radius: 14px; }
+    .token-list table{ width:100%; border-collapse: collapse; font-size: .9rem; }
+    .token-list th, .token-list td{ padding: 9px 8px; border-top:1px solid rgba(255,255,255,.08); text-align:left; vertical-align: top; }
+    .token-list th{ position: sticky; top:0; background: rgba(12,15,34,.96); color: rgba(255,255,255,.72); }
+    .token-list code{ color: rgba(182,255,0,.94); }
+    @media (max-width: 720px){ .admin-row{ grid-template-columns: 1fr; } .admin-actions .knockout-stage-btn, .token-tools .knockout-stage-btn, .token-tools .btn{ width:100%; } }
   </style>
 </head>
 <body>
   <div class="admin-card">
     <div class="admin-title">Admin — Invitaciones</div>
     <div class="admin-sub">
-      Genera links de <b>un solo uso</b> para activar un dispositivo. El link se bloquea después del primer acceso.
+      Genera links de <b>un solo uso</b> para activar un dispositivo. Puedes crear 1, 100, 200 o hasta 500 tokens por lote para tenerlos listos y mandarlos rápido por WhatsApp.
     </div>
 
     <div class="admin-row">
       <input id="adminKey" type="password" placeholder="ADMIN_KEY (secreto)" autocomplete="off"/>
-      <button id="btnCreate" class="knockout-stage-btn" type="button">Crear invitación</button>
+      <input id="inviteCount" type="number" min="1" max="500" value="1" placeholder="Cantidad" />
+      <button id="btnCreate" class="knockout-stage-btn" type="button">Crear</button>
     </div>
 
     <div class="admin-actions">
-      <span class="chip">📌 Se recomienda crear un link por persona</span>
-      <span class="chip">🧾 Guarda el link en tu CRM/WhatsApp</span>
+      <span class="chip">📌 Un link por persona/dispositivo</span>
+      <span class="chip">🧾 Puedes descargar CSV del lote</span>
+      <span class="chip">🔒 No compartas tu ADMIN_KEY</span>
     </div>
 
     <div id="err" class="admin-err"></div>
 
     <div id="out" class="admin-out" style="display:none;">
-      <div><b>Link de invitación:</b></div>
-      <div id="inviteUrl" style="margin-top:6px;"></div>
-      <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
-        <button id="btnCopy" class="knockout-stage-btn" type="button">Copiar</button>
-        <button id="btnNew" class="btn" type="button">Crear otra</button>
+      <div><b id="batchTitle">Invitaciones creadas:</b></div>
+      <div class="token-tools">
+        <button id="btnCopy" class="knockout-stage-btn" type="button">Copiar links</button>
+        <button id="btnDownload" class="btn" type="button">Descargar CSV</button>
+        <button id="btnNew" class="btn" type="button">Crear otro lote</button>
       </div>
-      <div style="margin-top:10px; color: var(--muted);">
-        <b>UserId:</b> <span id="userId"></span>
+      <div class="token-list">
+        <table>
+          <thead><tr><th>#</th><th>Token</th><th>Link</th><th>UserId</th></tr></thead>
+          <tbody id="tokenRows"></tbody>
+        </table>
       </div>
     </div>
   </div>
 
   <script>
+    let lastInvitations = [];
+
+    function getCount(){
+      const n = Number(document.getElementById('inviteCount').value || 1);
+      if (!Number.isFinite(n)) return 1;
+      return Math.max(1, Math.min(500, Math.floor(n)));
+    }
+
     async function createInvite(){
       const adminKey = document.getElementById('adminKey').value.trim();
+      const count = getCount();
       const err = document.getElementById('err');
       const out = document.getElementById('out');
+      const btn = document.getElementById('btnCreate');
       err.textContent = '';
       out.style.display = 'none';
+      lastInvitations = [];
 
       if(!adminKey){
         err.textContent = 'Ingresa tu ADMIN_KEY.';
@@ -102,13 +91,15 @@
       }
 
       try{
+        btn.disabled = true;
+        btn.textContent = 'Creando…';
         const res = await fetch('/.netlify/functions/create-invite', {
           method: 'POST',
           headers: {
             'content-type': 'application/json',
             'x-admin-key': adminKey
           },
-          body: JSON.stringify({})
+          body: JSON.stringify({ count })
         });
 
         const data = await res.json().catch(() => ({}));
@@ -118,22 +109,35 @@
           return;
         }
 
-        document.getElementById('inviteUrl').textContent = data.inviteUrl || '';
-        document.getElementById('userId').textContent = data.userId || '';
+        lastInvitations = Array.isArray(data.invitations) ? data.invitations : (data.inviteUrl ? [data] : []);
+        renderInvitations(lastInvitations);
         out.style.display = 'block';
-
       }catch(e){
         err.textContent = 'No se pudo conectar a las Functions. Asegúrate de estar en Netlify (o netlify dev).';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Crear';
       }
     }
 
+    function renderInvitations(invitations){
+      document.getElementById('batchTitle').textContent = `Invitaciones creadas: ${invitations.length}`;
+      document.getElementById('tokenRows').innerHTML = invitations.map((item, index) => `
+        <tr>
+          <td>${index + 1}</td>
+          <td><code>${item.token || ''}</code></td>
+          <td>${item.inviteUrl || ''}</td>
+          <td>${item.userId || ''}</td>
+        </tr>
+      `).join('');
+    }
+
     async function copyInvite(){
-      const text = document.getElementById('inviteUrl').textContent.trim();
+      const text = lastInvitations.map(x => x.inviteUrl).filter(Boolean).join('\n');
       if(!text) return;
       try{
         await navigator.clipboard.writeText(text);
       }catch(e){
-        // fallback
         const ta = document.createElement('textarea');
         ta.value = text;
         document.body.appendChild(ta);
@@ -143,11 +147,33 @@
       }
     }
 
+    function downloadCSV(){
+      if(!lastInvitations.length) return;
+      const header = 'numero,token,userId,inviteUrl\n';
+      const rows = lastInvitations.map((item, index) => [
+        index + 1,
+        item.token || '',
+        item.userId || '',
+        item.inviteUrl || ''
+      ].map(v => '"' + String(v).replaceAll('"','""') + '"').join(',')).join('\n');
+      const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `tokens-fixture-mundialista-${new Date().toISOString().slice(0,10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
     document.getElementById('btnCreate').addEventListener('click', createInvite);
     document.getElementById('btnCopy').addEventListener('click', copyInvite);
+    document.getElementById('btnDownload').addEventListener('click', downloadCSV);
     document.getElementById('btnNew').addEventListener('click', () => {
       document.getElementById('out').style.display = 'none';
       document.getElementById('err').textContent = '';
+      lastInvitations = [];
     });
   </script>
 </body>

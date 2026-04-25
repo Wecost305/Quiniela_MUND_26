@@ -11,6 +11,43 @@ function randToken(bytes = 18) {
     .replace(/=+$/g, '');
 }
 
+function parseCount(event) {
+  let body = {};
+  try { body = JSON.parse(event.body || '{}'); } catch (e) { body = {}; }
+  const raw = Number(body.count || body.quantity || 1);
+  if (!Number.isFinite(raw)) return 1;
+  return Math.max(1, Math.min(500, Math.floor(raw)));
+}
+
+async function createOneInvite(store, origin) {
+  const now = Date.now();
+  let token = '';
+  let userId = '';
+  let inviteKey = '';
+
+  for (let i = 0; i < 10; i++) {
+    token = randToken(18);
+    userId = 'u_' + randToken(10);
+    inviteKey = `invites/${token}`;
+
+    const existing = await store.get(inviteKey, { consistency: 'strong' });
+    if (existing === null) break;
+    token = '';
+  }
+
+  if (!token) throw new Error('No se pudo generar un token único.');
+
+  await store.setJSON(inviteKey, {
+    token,
+    userId,
+    createdAt: now,
+    used: false
+  });
+
+  const inviteUrl = `${origin}/?invite=${encodeURIComponent(token)}`;
+  return { token, userId, inviteUrl };
+}
+
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Method Not Allowed' });
 
@@ -24,44 +61,27 @@ exports.handler = async (event) => {
   }
 
   try {
-    // Netlify Blobs no se auto-configura en modo "Lambda compatibility".
-    // Hay que inicializar el entorno con el event antes de usar getStore().
-    connectLambda(event);
+    if (typeof connectLambda === 'function') connectLambda(event);
     const store = getStore({ name: 'qm2026', consistency: 'strong' });
-
-    const now = Date.now();
-    let token = '';
-    let userId = '';
-    let inviteKey = '';
-
-    // generar token único (muy baja probabilidad de colisión, pero validamos)
-    for (let i = 0; i < 10; i++) {
-      token = randToken(18);
-      userId = 'u_' + randToken(10);
-      inviteKey = `invites/${token}`;
-
-      const existing = await store.get(inviteKey, { consistency: 'strong' });
-      if (existing === null) break;
-      token = '';
-    }
-
-    if (!token) {
-      return json(500, { error: 'No se pudo generar un token único. Intenta de nuevo.' });
-    }
-
-    await store.setJSON(inviteKey, {
-      token,
-      userId,
-      createdAt: now,
-      used: false
-    });
 
     const proto = event.headers['x-forwarded-proto'] || 'https';
     const host = event.headers.host || process.env.URL?.replace(/^https?:\/\//,'') || '';
     const origin = process.env.URL || `${proto}://${host}`;
-    const inviteUrl = `${origin}/?invite=${encodeURIComponent(token)}`;
+    const count = parseCount(event);
 
-    return json(200, { token, userId, inviteUrl });
+    const invitations = [];
+    for (let i = 0; i < count; i++) {
+      invitations.push(await createOneInvite(store, origin));
+    }
+
+    return json(200, {
+      count: invitations.length,
+      invitations,
+      // Compatibilidad con el panel anterior cuando solo se crea una invitación
+      token: invitations[0]?.token,
+      userId: invitations[0]?.userId,
+      inviteUrl: invitations[0]?.inviteUrl
+    });
   } catch (e) {
     return json(500, { error: 'Error interno al crear invitación.', detail: String(e && e.message ? e.message : e) });
   }

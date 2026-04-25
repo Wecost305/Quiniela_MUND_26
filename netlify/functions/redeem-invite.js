@@ -19,11 +19,7 @@ exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Method Not Allowed' });
 
   let body = {};
-  try {
-    body = JSON.parse(event.body || '{}');
-  } catch (e) {
-    body = {};
-  }
+  try { body = JSON.parse(event.body || '{}'); } catch (e) { body = {}; }
 
   const token = String(body.token || '').trim();
   const deviceId = String(body.deviceId || '').trim();
@@ -32,8 +28,7 @@ exports.handler = async (event) => {
   if (!deviceId) return json(400, { error: 'DeviceId requerido.' });
 
   try {
-    // Inicializa entorno de Blobs para funciones en modo Lambda compatibility.
-    connectLambda(event);
+    if (typeof connectLambda === 'function') connectLambda(event);
     const store = getStore({ name: 'qm2026', consistency: 'strong' });
 
     const inviteKey = `invites/${token}`;

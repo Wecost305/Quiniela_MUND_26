@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quiniela Mundial 2026</title>
+    <title>Fixture interactivo Mundialista 2026</title>
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,14 +11,14 @@
 </head>
 <body>
 <!-- Splash / Portada -->
-<div class="splash" id="splash" aria-label="Cargando quiniela" role="status">
+<div class="splash" id="splash" aria-label="Cargando fixture mundialista" role="status">
   <div class="splash__bg"></div>
 
   <div class="splash__card">
     <div class="splash__brand">
       <!-- Usa tu logo actual o uno del torneo -->
       <img class="splash__logo" src="images/logo_wecost.png" alt="FIFA World Cup 26" />
-      <div class="splash__title">Quiniela Mundial 2026</div>
+      <div class="splash__title">Fixture interactivo Mundialista 2026</div>
       <div class="splash__subtitle">Cargando grupos y eliminatoria…</div>
     </div>
 
@@ -40,9 +40,9 @@
     <div id="name-modal" class="modal-overlay" style="display: none; z-index: 2000;">
         <div class="modal-content" style="max-width: 400px; height: auto; text-align: center;">
             <h2 class="section-title">¡Bienvenido!</h2>
-            <p style="color: var(--muted); margin-bottom: 10px;">Por favor, ingresa tu nombre para personalizar tu quiniela.</p>
+            <p style="color: var(--muted); margin-bottom: 10px;">Por favor, ingresa tu nombre para personalizar tu fixture.</p>
             <p style="color: var(--muted); margin: 0 0 8px;">✅ Tus cambios se guardan automáticamente.</p>
-            <p style="color: var(--muted); margin: 0 0 20px;">🔒 Este dispositivo quedará vinculado a tu quiniela.</p>
+            <p style="color: var(--muted); margin: 0 0 20px;">🔒 Este dispositivo quedará vinculado a tu fixture.</p>
             <form id="name-form">
                 <input type="text" id="user-name-input" placeholder="Escribe tu nombre aquí" required style="width: 80%; padding: 12px; font-size: 1.1em; border-radius: 8px; border: 1px solid var(--border-color);">
                 <button type="submit" class="knockout-stage-btn" style="font-size: 1.5em; margin-top: 20px;">Guardar y Continuar</button>
@@ -52,15 +52,15 @@
 
 
     <!-- Acceso (Opción B: token de un solo uso) -->
-    <div id="auth-gate" class="auth-gate is-hidden" role="dialog" aria-modal="true" aria-label="Acceso a tu quiniela">
+    <div id="auth-gate" class="auth-gate is-hidden" role="dialog" aria-modal="true" aria-label="Acceso a tu fixture">
         <div class="auth-gate__bg"></div>
         <div class="auth-gate__card">
-            <div class="auth-gate__title">Acceso a tu quiniela</div>
+            <div class="auth-gate__title">Acceso a tu fixture</div>
             <div class="auth-gate__subtitle">Pega tu <b>token</b> o el <b>link</b> de invitación para activar este dispositivo.</div>
 
             <div class="auth-gate__tips">
                 <div>✅ Tus cambios se guardan automáticamente.</div>
-                <div>🔒 Este dispositivo quedará vinculado a tu quiniela.</div>
+                <div>🔒 Este dispositivo quedará vinculado a tu fixture.</div>
             </div>
 
             <div class="auth-gate__form">
@@ -80,9 +80,9 @@
         <img src="images/logo_wecost.png" alt="Logo de la Empresa" class="logo-image">
     </a>
 </div>
-        <h1 class="main-title">QUINIELA MUNDIAL 2026</h1>
+        <h1 class="main-title">FIXTURE INTERACTIVO MUNDIALISTA 2026</h1>
         <div class="user-info">
-            <span id="user-name-display">Quiniela de: --</span>
+            <span id="user-name-display">Fixture de: --</span>
         </div>
     
     </header>
@@ -91,7 +91,7 @@
     <section class="topbar" id="topbar" aria-label="Controles rápidos">
         <div class="topbar__left">
             <div class="topbar__metric">
-                <span class="topbar__label">Partidos capturados</span>
+                <span class="topbar__label">Resultados capturados</span>
                 <span id="progress-groups" class="topbar__value">0/72</span>
             </div>
             <div class="topbar__metric">
@@ -107,12 +107,25 @@
         </div>
     </section>
 
+    <section class="prediction-summary" id="prediction-summary" aria-label="Resumen de pronósticos personales">
+        <div class="prediction-summary__head">
+            <h2>Mi resumen de pronósticos</h2>
+            <p>Todo se guarda únicamente en este dispositivo. No hay ranking ni competencia con otros usuarios.</p>
+        </div>
+        <div class="prediction-summary__grid">
+            <div class="prediction-stat"><span id="pred-total">0</span><small>Pronósticos</small></div>
+            <div class="prediction-stat"><span id="pred-evaluated">0</span><small>Evaluados</small></div>
+            <div class="prediction-stat"><span id="pred-exact">0</span><small>Exactos</small></div>
+            <div class="prediction-stat"><span id="pred-points">0</span><small>Puntos</small></div>
+        </div>
+    </section>
+
 
     <!-- HERO / BANNER (estilo streaming) -->
     <section class="hero" aria-label="Banner principal">
         <div>
-            <h2 class="hero-title">Vive el Mundial 2026 — En modo Quiniela</h2>
-            <p class="hero-subtitle">Captura resultados en fase de grupos y mira cómo se arma automáticamente la fase eliminatoria.</p>
+            <h2 class="hero-title">Fixture interactivo Mundialista 2026</h2>
+            <p class="hero-subtitle">Captura resultados, agrega tus pronósticos personales y revisa tus aciertos en tu propio dispositivo.</p>
             <div class="hero-actions">
                 <a class="btn btn-primary" href="#groups-section">Ir a Fase de Grupos</a>
                 <button class="btn" type="button" onclick="document.getElementById('bracket-modal').style.display='flex'">Ver Fase Eliminatoria</button>
@@ -121,7 +134,7 @@
         <div class="hero-badges">
             <div class="hero-chip"><span class="hero-dot"></span> 12 Grupos</div>
             <div class="hero-chip"><span class="hero-dot mag"></span> 32 a Eliminatoria</div>
-            <div class="hero-chip"><span class="hero-dot lime"></span> Final + 3er Lugar</div>
+            <div class="hero-chip"><span class="hero-dot lime"></span> Pronósticos locales</div>
         </div>
     </section>
 
@@ -200,7 +213,7 @@
         <div class="modal-content export-modal" style="max-width: 520px; height: auto;">
             <button class="modal-close-btn" id="export-close" aria-label="Cerrar">&times;</button>
             <h2 class="section-title" style="margin-top: 0;">EXPORTAR</h2>
-            <p class="export-help">Exporta tu quiniela como imagen para compartirla sin dar acceso de edición.</p>
+            <p class="export-help">Exporta tu fixture como imagen para compartirla sin dar acceso de edición.</p>
             <div class="export-actions">
                 <button class="knockout-stage-btn" type="button" id="export-groups">Exportar Grupos (PNG)</button>
                 <button class="knockout-stage-btn" type="button" id="export-bracket">Exportar Eliminatoria (PNG)</button>
@@ -211,6 +224,7 @@
 
     <!-- SCRIPTS (AL FINAL Y EN EL ORDEN CORRECTO) -->
     <script src="groups-data.js"></script>
+    <script src="match-schedule.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script src="main.js"></script>
 
