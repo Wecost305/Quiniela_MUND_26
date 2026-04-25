@@ -95,6 +95,11 @@ function showAuthGate(msg) {
     const err = document.getElementById('auth-gate-error');
     if (!gate) return;
     gate.classList.remove('is-hidden');
+    gate.style.display = 'flex';
+    gate.style.visibility = 'visible';
+    gate.style.opacity = '1';
+    gate.style.pointerEvents = 'auto';
+    gate.setAttribute('aria-hidden', 'false');
     if (err) err.textContent = msg || '';
 }
 
@@ -103,6 +108,11 @@ function hideAuthGate() {
     const err = document.getElementById('auth-gate-error');
     if (!gate) return;
     gate.classList.add('is-hidden');
+    gate.style.display = 'none';
+    gate.style.visibility = 'hidden';
+    gate.style.opacity = '0';
+    gate.style.pointerEvents = 'none';
+    gate.setAttribute('aria-hidden', 'true');
     if (err) err.textContent = '';
 }
 
@@ -138,6 +148,7 @@ async function ensureAccessOrShowGate() {
         const legacy = getUserIdFromUrlLegacy() || 'local';
         currentUserId = legacy;
         storageKey = `quinielaMundial2026_${currentUserId}`;
+        hideAuthGate();
         return true;
     }
 
@@ -148,6 +159,7 @@ async function ensureAccessOrShowGate() {
     if (sessionId) {
         try {
             await verifySession(sessionId);
+            hideAuthGate();
             return true;
         } catch (e) {
             // Sesión inválida o cambió dispositivo
@@ -160,6 +172,7 @@ async function ensureAccessOrShowGate() {
         try {
             await redeemInvite(inviteFromUrl);
             clearInviteFromUrl();
+            hideAuthGate();
             return true;
         } catch (e) {
             showAuthGate(e.message || 'Token inválido.');
