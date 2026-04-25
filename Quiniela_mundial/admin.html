@@ -105,7 +105,7 @@
         const data = await res.json().catch(() => ({}));
 
         if(!res.ok){
-          err.textContent = data && data.error ? data.error : ('Error ' + res.status);
+          err.textContent = data && data.error ? (data.error + (data.detail ? ' Detalle: ' + data.detail : '')) : ('Error ' + res.status);
           return;
         }
 

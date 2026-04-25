@@ -934,6 +934,13 @@ a{ color: inherit; text-decoration: none; }
   padding: 18px;
   transition: opacity .25s ease;
 }
+
+.auth-gate.is-hidden{
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+
 .auth-gate__bg{
   position: absolute;
   inset: 0;

@@ -15,6 +15,64 @@ function randToken(bytes = 18) {
     .replace(/=+$/g, '');
 }
 
+function base64UrlToString(value) {
+  const normalized = String(value || '').replace(/-/g, '+').replace(/_/g, '/');
+  const padding = normalized.length % 4 ? '='.repeat(4 - (normalized.length % 4)) : '';
+  return Buffer.from(normalized + padding, 'base64').toString('utf8');
+}
+
+function getInviteSecret() {
+  return String(process.env.INVITE_SECRET || process.env.ADMIN_KEY || '')
+    .trim()
+    .normalize('NFKC');
+}
+
+function signPayload(payloadB64, secret) {
+  return crypto
+    .createHmac('sha256', secret)
+    .update(payloadB64)
+    .digest('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+function safeEqual(a, b) {
+  const bufA = Buffer.from(String(a || ''));
+  const bufB = Buffer.from(String(b || ''));
+  return bufA.length === bufB.length && crypto.timingSafeEqual(bufA, bufB);
+}
+
+function parseSignedInviteToken(token) {
+  if (!String(token || '').startsWith('v2.')) return null;
+
+  const parts = String(token).split('.');
+  if (parts.length !== 3) return null;
+
+  const [, payloadB64, signature] = parts;
+  const secret = getInviteSecret();
+  if (!secret) throw new Error('Falta configurar ADMIN_KEY o INVITE_SECRET en Netlify.');
+
+  const expected = signPayload(payloadB64, secret);
+  if (!safeEqual(signature, expected)) return null;
+
+  const payload = JSON.parse(base64UrlToString(payloadB64));
+  if (!payload || payload.v !== 2 || !payload.userId) return null;
+
+  return {
+    token,
+    userId: String(payload.userId),
+    createdAt: Number(payload.createdAt || Date.now()),
+    used: false,
+    stateless: true
+  };
+}
+
+function getBlobStore(event) {
+  if (typeof connectLambda === 'function') connectLambda(event);
+  return getStore({ name: 'qm2026', consistency: 'strong' });
+}
+
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Method Not Allowed' });
 
@@ -28,18 +86,33 @@ exports.handler = async (event) => {
   if (!deviceId) return json(400, { error: 'DeviceId requerido.' });
 
   try {
-    if (typeof connectLambda === 'function') connectLambda(event);
-    const store = getStore({ name: 'qm2026', consistency: 'strong' });
+    const store = getBlobStore(event);
+    const now = Date.now();
+    const deviceHash = sha256Hex(deviceId);
+    const tokenHash = sha256Hex(token);
 
-    const inviteKey = `invites/${token}`;
-    const invite = await store.get(inviteKey, { type: 'json', consistency: 'strong' });
+    // Compatibilidad con tokens anteriores guardados como invites/{token}.
+    let inviteKey = `invites/${token}`;
+    let invite = await store.get(inviteKey, { type: 'json', consistency: 'strong' });
+    let isSignedInvite = false;
+
+    // Tokens nuevos: son firmados y no se guardan al generarlos; se marcan usados al canjearlos.
+    if (!invite) {
+      invite = parseSignedInviteToken(token);
+      isSignedInvite = !!invite;
+      inviteKey = `redeemed-invites/${tokenHash}`;
+    }
 
     if (!invite) return json(404, { error: 'Token inválido.' });
-    if (invite.used) return json(409, { error: 'Este token ya fue utilizado. Solicita uno nuevo.' });
 
-    const now = Date.now();
+    if (isSignedInvite) {
+      const redeemed = await store.get(inviteKey, { type: 'json', consistency: 'strong' });
+      if (redeemed) return json(409, { error: 'Este token ya fue utilizado. Solicita uno nuevo.' });
+    } else if (invite.used) {
+      return json(409, { error: 'Este token ya fue utilizado. Solicita uno nuevo.' });
+    }
+
     const sessionId = 's_' + randToken(18);
-    const deviceHash = sha256Hex(deviceId);
 
     await store.setJSON(inviteKey, {
       ...invite,
@@ -66,6 +139,9 @@ exports.handler = async (event) => {
 
     return json(200, { sessionId, userId: invite.userId });
   } catch (e) {
-    return json(500, { error: 'Error interno al canjear token.', detail: String(e && e.message ? e.message : e) });
+    return json(500, {
+      error: 'Error interno al canjear token.',
+      detail: String(e && e.message ? e.message : e)
+    });
   }
 };

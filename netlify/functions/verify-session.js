@@ -1,40 +1,56 @@
-const crypto = require('crypto');
 const { getStore, connectLambda } = require('@netlify/blobs');
 const { json } = require('./_common');
 
-function sha256Hex(s) {
-  return crypto.createHash('sha256').update(String(s || '')).digest('hex');
+function getConfiguredStore(event) {
+  try { connectLambda(event); } catch (e) { /* ignore */ }
+
+  const siteID = (process.env.BLOBS_SITE_ID || '').trim();
+  const token = (process.env.BLOBS_TOKEN || '').trim();
+
+  return getStore({ name: 'qm2026', siteID, token });
 }
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Method Not Allowed' });
 
+<<<<<<< HEAD
   let body = {};
   try { body = JSON.parse(event.body || '{}'); } catch (e) { body = {}; }
-
-  const sessionId = String(body.sessionId || '').trim();
-  const deviceId = String(body.deviceId || '').trim();
-
-  if (!sessionId) return json(400, { error: 'sessionId requerido.' });
-  if (!deviceId) return json(400, { error: 'deviceId requerido.' });
+=======
+  const siteID = (process.env.BLOBS_SITE_ID || '').trim();
+  const tokenEnv = (process.env.BLOBS_TOKEN || '').trim();
+  if (!siteID || !tokenEnv) {
+    return json(500, {
+      error: 'Faltan variables de entorno para Blobs.',
+      detail: 'Configura BLOBS_SITE_ID y BLOBS_TOKEN en Netlify (Environment variables).'
+    });
+  }
+>>>>>>> 5a054cb109457c201f198d5ab9dc7cba51e27da8
 
   try {
+<<<<<<< HEAD
     if (typeof connectLambda === 'function') connectLambda(event);
     const store = getStore({ name: 'qm2026', consistency: 'strong' });
+=======
+    const store = getConfiguredStore(event);
+>>>>>>> 5a054cb109457c201f198d5ab9dc7cba51e27da8
 
-    const session = await store.get(`sessions/${sessionId}`, { type: 'json', consistency: 'strong' });
-    if (!session) return json(401, { error: 'Sesión inválida. Vuelve a activar tu acceso.' });
+    const body = JSON.parse(event.body || '{}');
 
-    const deviceHash = sha256Hex(deviceId);
-    if (session.deviceHash !== deviceHash) {
-      return json(403, { error: 'Esta sesión pertenece a otro dispositivo.' });
-    }
+    // Compatibilidad: acepta sessionId (frontend) o sessionToken (viejo)
+    const sessionId = String(body.sessionId || body.sessionToken || '').trim();
+    const deviceId = String(body.deviceId || '').trim();
 
-    const now = Date.now();
-    await store.setJSON(`sessions/${sessionId}`, { ...session, lastSeenAt: now });
+    if (!sessionId) return json(400, { error: 'Falta sessionId.' });
+    if (!deviceId) return json(400, { error: 'Falta deviceId.' });
+
+    const session = await store.get(`sessions/${sessionId}`, { type: 'json' });
+
+    if (!session) return json(401, { error: 'Sesión inválida.' });
+    if (session.deviceId !== deviceId) return json(401, { error: 'Sesión no coincide con este dispositivo.' });
 
     return json(200, { ok: true, userId: session.userId });
   } catch (e) {
-    return json(500, { error: 'Error interno al validar sesión.', detail: String(e && e.message ? e.message : e) });
+    return json(500, { error: 'Error interno al verificar sesión.', detail: String(e?.message || e) });
   }
 };
