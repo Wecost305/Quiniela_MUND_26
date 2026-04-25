@@ -551,6 +551,16 @@ async function exportCardLikePNG(sourceElement, filenameBase, titleText, options
     }
 }
 
+function getExportGroups() {
+    if (typeof groupsData !== 'undefined' && Array.isArray(groupsData)) {
+        return groupsData;
+    }
+
+    return Array.from(document.querySelectorAll('.group-card')).map(card => ({
+        id: card.dataset.groupId || String(card.id || '').replace('group-', '')
+    })).filter(group => group.id);
+}
+
 async function exportSingleGroupPNG(groupId, shouldCloseModal = true, options = {}) {
     if (shouldCloseModal) closeExportModal();
     const card = document.getElementById(`group-${groupId}`);
@@ -571,7 +581,7 @@ async function exportAllGroupsPNG() {
         if (typeof JSZip === 'function') {
             const zip = new JSZip();
 
-            for (const group of GROUPS) {
+            for (const group of getExportGroups()) {
                 const result = await exportSingleGroupPNG(group.id, false, { download: false });
                 if (result && result.blob) {
                     zip.file(result.filename, result.blob);
@@ -585,7 +595,7 @@ async function exportAllGroupsPNG() {
         }
 
         alert('Tu navegador no cargó el generador ZIP. Se intentará descargar grupo por grupo; permite descargas múltiples si Chrome lo solicita.');
-        for (const group of GROUPS) {
+        for (const group of getExportGroups()) {
             await exportSingleGroupPNG(group.id, false);
             await sleep(350);
         }
@@ -602,8 +612,10 @@ async function exportAllGroupsPNG() {
 
 function renderExportGroupButtons() {
     const grid = document.getElementById('export-group-grid');
-    if (!grid || !Array.isArray(GROUPS)) return;
-    grid.innerHTML = GROUPS.map(group => `<button class="export-group-btn" type="button" data-group-export="${group.id}">Grupo ${group.id}</button>`).join('');
+    if (!grid) return;
+    const exportGroups = getExportGroups();
+    if (!Array.isArray(exportGroups) || exportGroups.length === 0) return;
+    grid.innerHTML = exportGroups.map(group => `<button class="export-group-btn" type="button" data-group-export="${group.id}">Grupo ${group.id}</button>`).join('');
     grid.querySelectorAll('[data-group-export]').forEach(btn => {
         btn.addEventListener('click', () => exportSingleGroupPNG(btn.dataset.groupExport));
     });
