@@ -18,6 +18,7 @@ let manualThirdAssignments = {};
 // Pronósticos personales del usuario.
 // No afectan el cálculo FIFA ni la fase eliminatoria; solo sirven como referencia personal.
 let userPredictions = {};
+let upcomingTicker = null;
 
 
 // Calendario mostrado en hora local de Ciudad de México (CDMX).
@@ -212,6 +213,251 @@ function renderTeamName(code, side) {
         <span class="team-flag" aria-hidden="true">${safeFlag}</span>
         <span class="team-label">${safeName}</span>
     </span>`;
+}
+
+
+// --- Agenda dinámica de próximos partidos ---
+const CDMX_TIMEZONE = 'America/Mexico_City';
+const MATCH_ESTIMATED_DURATION_MS = 2.5 * 60 * 60 * 1000;
+const MONTHS_ES = {
+    enero: 1, febrero: 2, marzo: 3, abril: 4, mayo: 5, junio: 6,
+    julio: 7, agosto: 8, septiembre: 9, setiembre: 9, octubre: 10, noviembre: 11, diciembre: 12
+};
+
+function pad2(value) {
+    return String(value).padStart(2, '0');
+}
+
+function parseScheduleDateParts(item) {
+    const dateText = String(item?.date || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const dateMatch = dateText.match(/(\d{1,2})\s+([a-z]+)\s+(\d{4})/);
+    const timeMatch = String(item?.time || '').match(/(\d{1,2}):(\d{2})/);
+    if (!dateMatch || !timeMatch) return null;
+
+    const day = Number(dateMatch[1]);
+    const month = MONTHS_ES[dateMatch[2]];
+    const year = Number(dateMatch[3]);
+    const hour = Number(timeMatch[1]);
+    const minute = Number(timeMatch[2]);
+    if (!day || !month || !year || Number.isNaN(hour) || Number.isNaN(minute)) return null;
+
+    return { year, month, day, hour, minute };
+}
+
+function getScheduleTimestamp(item) {
+    const parts = parseScheduleDateParts(item);
+    if (!parts) return null;
+    // Los horarios publicados están convertidos a CDMX. En junio/julio 2026 CDMX opera UTC-6.
+    const iso = `${parts.year}-${pad2(parts.month)}-${pad2(parts.day)}T${pad2(parts.hour)}:${pad2(parts.minute)}:00-06:00`;
+    const timestamp = new Date(iso).getTime();
+    return Number.isNaN(timestamp) ? null : timestamp;
+}
+
+function getScheduleDateKey(item) {
+    const parts = parseScheduleDateParts(item);
+    if (!parts) return '';
+    return `${parts.year}-${pad2(parts.month)}-${pad2(parts.day)}`;
+}
+
+function formatCdmxNow() {
+    try {
+        return new Intl.DateTimeFormat('es-MX', {
+            timeZone: CDMX_TIMEZONE,
+            weekday: 'short', day: '2-digit', month: 'short',
+            hour: '2-digit', minute: '2-digit', hour12: false
+        }).format(new Date());
+    } catch (_) {
+        return new Date().toLocaleString('es-MX');
+    }
+}
+
+function formatTimeUntil(timestamp, now = Date.now()) {
+    const diff = timestamp - now;
+    if (diff <= 0 && now < timestamp + MATCH_ESTIMATED_DURATION_MS) return 'En juego aprox.';
+    if (diff <= 0) return 'Ya inició';
+
+    const totalMinutes = Math.ceil(diff / 60000);
+    const days = Math.floor(totalMinutes / 1440);
+    const hours = Math.floor((totalMinutes % 1440) / 60);
+    const minutes = totalMinutes % 60;
+
+    if (days > 0) return `Faltan ${days} d ${hours} h`;
+    if (hours > 0) return `Faltan ${hours} h ${minutes} min`;
+    return `Faltan ${minutes} min`;
+}
+
+function getBracketRoundLabel(matchId) {
+    if (matchId.startsWith('16-')) return 'Ronda de 32';
+    if (matchId.startsWith('8-')) return 'Octavos de final';
+    if (matchId.startsWith('4-')) return 'Cuartos de final';
+    if (matchId.startsWith('2-')) return 'Semifinal';
+    if (matchId.startsWith('3-')) return 'Tercer lugar';
+    if (matchId.startsWith('1-')) return 'Final';
+    return 'Eliminatoria';
+}
+
+function getBracketTeamLabel(matchId, side) {
+    const matchEl = document.querySelector(`.match-container[data-match-id="${matchId}"]`);
+    const pill = matchEl?.querySelector(`.team-pill[data-team-pos="${side}"]`);
+    const code = pill?.dataset.teamCode;
+    if (!code) return 'Por definir';
+    return getTeamDisplayName(code);
+}
+
+function getBracketTeamCode(matchId, side) {
+    const matchEl = document.querySelector(`.match-container[data-match-id="${matchId}"]`);
+    return matchEl?.querySelector(`.team-pill[data-team-pos="${side}"]`)?.dataset.teamCode || '';
+}
+
+function isBracketMatchCompleteById(matchId) {
+    const matchEl = document.querySelector(`.match-container[data-match-id="${matchId}"]`);
+    return matchEl ? isKnockoutMatchComplete(matchEl) : false;
+}
+
+function collectScheduledMatches() {
+    const schedule = getScheduleData();
+    const matches = [];
+    const groupPairs = [[0, 1], [2, 3], [0, 2], [1, 3], [0, 3], [1, 2]];
+
+    groupsData.forEach(group => {
+        const groupSchedule = schedule?.groups?.[group.id] || [];
+        groupPairs.forEach(([homeIndex, awayIndex], matchIndex) => {
+            const item = groupSchedule[matchIndex];
+            if (!item) return;
+            const timestamp = getScheduleTimestamp(item);
+            if (!timestamp) return;
+            const homeCode = group.codes[homeIndex];
+            const awayCode = group.codes[awayIndex];
+            matches.push({
+                id: getGroupPredictionMatchId(group.id, matchIndex),
+                type: 'group',
+                phase: `Grupo ${group.id}`,
+                matchNo: item.no ? `M${item.no}` : '',
+                home: getTeamDisplayName(homeCode),
+                away: getTeamDisplayName(awayCode),
+                homeCode,
+                awayCode,
+                date: item.date,
+                time: item.time,
+                venue: item.venue,
+                city: item.city,
+                timestamp,
+                dateKey: getScheduleDateKey(item),
+                completed: false
+            });
+        });
+    });
+
+    Object.entries(schedule?.bracket || {}).forEach(([matchId, item]) => {
+        const timestamp = getScheduleTimestamp(item);
+        if (!timestamp) return;
+        matches.push({
+            id: matchId,
+            type: 'bracket',
+            phase: getBracketRoundLabel(matchId),
+            matchNo: item.no ? `M${item.no}` : '',
+            home: getBracketTeamLabel(matchId, 'home'),
+            away: getBracketTeamLabel(matchId, 'away'),
+            homeCode: getBracketTeamCode(matchId, 'home'),
+            awayCode: getBracketTeamCode(matchId, 'away'),
+            date: item.date,
+            time: item.time,
+            venue: item.venue,
+            city: item.city,
+            timestamp,
+            dateKey: getScheduleDateKey(item),
+            completed: isBracketMatchCompleteById(matchId)
+        });
+    });
+
+    return matches.sort((a, b) => a.timestamp - b.timestamp);
+}
+
+function getVisibleUpcomingMatches(matches, now = Date.now()) {
+    const active = matches.filter(match => now >= match.timestamp && now < match.timestamp + MATCH_ESTIMATED_DURATION_MS);
+    if (active.length) return { mode: 'active', matches: active };
+
+    const next = matches.find(match => match.timestamp > now);
+    if (!next) return { mode: 'finished', matches: [] };
+
+    const sameDay = matches.filter(match => match.dateKey === next.dateKey && match.timestamp >= next.timestamp);
+    return { mode: 'next', matches: sameDay.slice(0, 6) };
+}
+
+function renderUpcomingMatches() {
+    const panel = document.getElementById('upcoming-panel');
+    const list = document.getElementById('upcoming-list');
+    const summary = document.getElementById('upcoming-summary');
+    const nowEl = document.getElementById('upcoming-now');
+    if (!panel || !list || !summary) return;
+
+    if (nowEl) nowEl.textContent = `Hora CDMX: ${formatCdmxNow()}`;
+
+    const allMatches = collectScheduledMatches();
+    const now = Date.now();
+    const visible = getVisibleUpcomingMatches(allMatches, now);
+
+    if (visible.mode === 'finished') {
+        summary.textContent = 'Ya no hay partidos pendientes en el calendario.';
+        list.innerHTML = `<div class="upcoming-empty">El torneo ya terminó según el calendario cargado.</div>`;
+        return;
+    }
+
+    const first = visible.matches[0];
+    const statusText = visible.mode === 'active'
+        ? 'Partido en curso según la hora CDMX'
+        : `Próximo bloque: ${first.date}`;
+    summary.textContent = statusText;
+
+    list.innerHTML = visible.matches.map((match, index) => {
+        const isMain = index === 0;
+        const place = [match.venue, match.city].filter(Boolean).join(' · ');
+        const status = formatTimeUntil(match.timestamp, now);
+        return `
+            <article class="upcoming-card ${isMain ? 'is-main' : ''}">
+                <div class="upcoming-card__top">
+                    <span class="upcoming-badge">${escapeHTML(match.matchNo || match.phase)}</span>
+                    <span class="upcoming-phase">${escapeHTML(match.phase)}</span>
+                    <span class="upcoming-countdown">${escapeHTML(status)}</span>
+                </div>
+                <div class="upcoming-teams" title="${escapeHTML(match.home)} vs ${escapeHTML(match.away)}">
+                    <span>${escapeHTML(match.home)}</span>
+                    <strong>vs</strong>
+                    <span>${escapeHTML(match.away)}</span>
+                </div>
+                <div class="upcoming-meta">
+                    <span>${escapeHTML(match.date)} · ${escapeHTML(match.time)}</span>
+                    ${place ? `<span>${escapeHTML(place)}</span>` : ''}
+                </div>
+                <button class="btn btn-sm upcoming-jump" type="button" data-upcoming-type="${escapeHTML(match.type)}" data-upcoming-id="${escapeHTML(match.id)}">Ir al partido</button>
+            </article>`;
+    }).join('');
+}
+
+function startUpcomingTicker() {
+    if (upcomingTicker) return;
+    upcomingTicker = setInterval(renderUpcomingMatches, 60000);
+}
+
+function jumpToScheduledMatch(type, id) {
+    if (!id) return;
+    if (type === 'bracket') {
+        openBracketModal();
+        setTimeout(() => {
+            const target = document.querySelector(`.match-container[data-match-id="${id}"]`);
+            if (target) {
+                target.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'center' });
+                highlightOnce(target);
+            }
+        }, 80);
+        return;
+    }
+
+    const target = document.querySelector(`.match-grid[data-match-id="${id}"]`);
+    if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        highlightOnce(target);
+    }
 }
 
 const THIRD_ASSIGNMENT_SLOTS = [
@@ -770,6 +1016,8 @@ function initApp() {
     loadStateFromStorage();
     updateProgressUI();
     updateSaveIndicator();
+    renderUpcomingMatches();
+    startUpcomingTicker();
 
     // Verificamos si el usuario ya tiene un nombre guardado
     const savedState = JSON.parse(localStorage.getItem(storageKey));
@@ -1215,6 +1463,7 @@ function initializeEventListeners() {
             // Cuando se cambia un marcador, validamos y avanzamos
             handleBracketScoreChange(e.target.closest('.match-container'));
             updateProgressUI();
+            renderUpcomingMatches();
         }
     });
     // ¡NUEVO LISTENER para el formulario de nombre!
@@ -1269,6 +1518,15 @@ function initializeEventListeners() {
     if (exportGroups) exportGroups.addEventListener('click', exportGroupsPNG);
     if (exportBracket) exportBracket.addEventListener('click', exportBracketPNG);
 
+    const upcomingPanel = document.getElementById('upcoming-panel');
+    if (upcomingPanel) {
+        upcomingPanel.addEventListener('click', (e) => {
+            const btn = e.target.closest('.upcoming-jump');
+            if (!btn) return;
+            jumpToScheduledMatch(btn.dataset.upcomingType, btn.dataset.upcomingId);
+        });
+    }
+
     // --- Bracket: penales (empates) ---
     const bracketContainer = document.getElementById('bracket-container');
     if (bracketContainer) {
@@ -1285,6 +1543,7 @@ function initializeEventListeners() {
                 markDirty();
                 handleBracketScoreChange(match);
                 updateProgressUI();
+                renderUpcomingMatches();
             }
         });
 
@@ -1317,6 +1576,7 @@ function initializeEventListeners() {
             markDirty();
             handleBracketScoreChange(match);
             updateProgressUI();
+            renderUpcomingMatches();
         });
     }
 
@@ -1494,6 +1754,7 @@ function updateAllCalculations() {
     updateGlobalStats();
 
     updateProgressUI();
+    renderUpcomingMatches();
     saveStateToStorage();
 }
 
@@ -2156,6 +2417,7 @@ function loadStateFromStorage() {
     }
 
     isLoading = false; // --- Desactivamos la bandera de carga al finalizar ---
+    renderUpcomingMatches();
 }
 
 // ==================================================
