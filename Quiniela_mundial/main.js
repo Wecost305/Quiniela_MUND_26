@@ -15,6 +15,10 @@ let manualGroupOrders = {};
 let manualThirdOrder = [];
 let manualThirdAssignments = {};
 
+// Pronósticos personales del usuario.
+// No afectan el cálculo FIFA ni la fase eliminatoria; solo sirven como referencia personal.
+let userPredictions = {};
+
 const THIRD_ASSIGNMENT_SLOTS = [
     { matchId: '16-2',  matchNo: 'M74', winnerGroup: 'E', label: '1E vs 3º A/B/C/D/F', allowed: ['A','B','C','D','F'] },
     { matchId: '16-5',  matchNo: 'M77', winnerGroup: 'I', label: '1I vs 3º C/D/F/G/H', allowed: ['C','D','F','G','H'] },
@@ -584,6 +588,120 @@ function initApp() {
 }
 
 
+// --- PRONÓSTICOS PERSONALES ---
+function getGroupPredictionMatchId(groupId, matchIndex) {
+    return `G${groupId}-M${Number(matchIndex) + 1}`;
+}
+
+function renderPredictionBlock(matchId, team1, team2) {
+    return `
+        <div class="prediction-block" data-prediction-match="${matchId}">
+            <div class="prediction-title">MI PRONÓSTICO</div>
+            <div class="prediction-row">
+                <span class="prediction-team prediction-home"><span class="prediction-code">${team1}</span> ${TEAMS_DATA[team1].name}</span>
+                <input type="number" min="0" max="20" step="1" inputmode="numeric" class="prediction-input" data-side="home" aria-label="Pronóstico ${TEAMS_DATA[team1].name}">
+                <span class="prediction-separator">-</span>
+                <input type="number" min="0" max="20" step="1" inputmode="numeric" class="prediction-input" data-side="away" aria-label="Pronóstico ${TEAMS_DATA[team2].name}">
+                <span class="prediction-team prediction-away"><span class="prediction-code">${team2}</span> ${TEAMS_DATA[team2].name}</span>
+            </div>
+            <div class="prediction-status" data-prediction-status>Agrega tu pronóstico antes del partido.</div>
+        </div>`;
+}
+
+function getPredictionForMatch(matchId) {
+    if (!matchId) return { home: '', away: '' };
+    if (!userPredictions[matchId]) userPredictions[matchId] = { home: '', away: '' };
+    return userPredictions[matchId];
+}
+
+function getMatchTrend(home, away) {
+    const h = Number(home);
+    const a = Number(away);
+    if (Number.isNaN(h) || Number.isNaN(a)) return null;
+    if (h === a) return 'draw';
+    return h > a ? 'home' : 'away';
+}
+
+function evaluatePrediction(predHome, predAway, realHome, realAway) {
+    if (predHome === '' || predAway === '' || realHome === '' || realAway === '') return null;
+    const ph = Number(predHome);
+    const pa = Number(predAway);
+    const rh = Number(realHome);
+    const ra = Number(realAway);
+    if ([ph, pa, rh, ra].some(Number.isNaN)) return null;
+    if (ph === rh && pa === ra) {
+        return { points: 3, label: 'Marcador exacto' };
+    }
+    if (getMatchTrend(ph, pa) === getMatchTrend(rh, ra)) {
+        return { points: 1, label: 'Acertaste ganador/empate' };
+    }
+    return { points: 0, label: 'Sin acierto' };
+}
+
+function updatePredictionStatusForMatch(matchEl) {
+    if (!matchEl) return;
+    const matchId = matchEl.dataset.matchId;
+    const status = matchEl.querySelector('[data-prediction-status]');
+    if (!matchId || !status) return;
+
+    const prediction = getPredictionForMatch(matchId);
+    const [realHomeInput, realAwayInput] = matchEl.querySelectorAll('.score-input');
+    const predHome = prediction.home ?? '';
+    const predAway = prediction.away ?? '';
+
+    status.classList.remove('prediction-ok', 'prediction-pending', 'prediction-empty');
+
+    if (predHome === '' && predAway === '') {
+        status.textContent = 'Agrega tu pronóstico antes del partido.';
+        status.classList.add('prediction-empty');
+        return;
+    }
+
+    if (predHome === '' || predAway === '') {
+        status.textContent = 'Completa ambos marcadores del pronóstico.';
+        status.classList.add('prediction-pending');
+        return;
+    }
+
+    const result = evaluatePrediction(predHome, predAway, realHomeInput?.value ?? '', realAwayInput?.value ?? '');
+    if (!result) {
+        status.textContent = `Pronóstico guardado: ${predHome} - ${predAway}`;
+        status.classList.add('prediction-pending');
+        return;
+    }
+
+    status.textContent = `${result.label}: ${result.points} ${result.points === 1 ? 'punto' : 'puntos'}`;
+    status.classList.add(result.points > 0 ? 'prediction-ok' : 'prediction-empty');
+}
+
+function restorePredictionInputs() {
+    document.querySelectorAll('.match-grid[data-match-id]').forEach(matchEl => {
+        const matchId = matchEl.dataset.matchId;
+        const prediction = getPredictionForMatch(matchId);
+        const homeInput = matchEl.querySelector('.prediction-input[data-side="home"]');
+        const awayInput = matchEl.querySelector('.prediction-input[data-side="away"]');
+        if (homeInput) homeInput.value = prediction.home ?? '';
+        if (awayInput) awayInput.value = prediction.away ?? '';
+        updatePredictionStatusForMatch(matchEl);
+    });
+}
+
+function handlePredictionInput(inputEl) {
+    const matchEl = inputEl.closest('.match-grid');
+    if (!matchEl) return;
+    const matchId = matchEl.dataset.matchId;
+    const side = inputEl.dataset.side;
+    if (!matchId || !side) return;
+
+    sanitizeScoreInput(inputEl);
+    const prediction = getPredictionForMatch(matchId);
+    prediction[side] = inputEl.value;
+    userPredictions[matchId] = prediction;
+    updatePredictionStatusForMatch(matchEl);
+    markDirty();
+}
+
+
 // --- GENERACIÓN DE HTML ---
 function generateGroupsHTML() {
     const container = document.getElementById('groups-container');
@@ -594,23 +712,25 @@ function generateGroupsHTML() {
                 <button class="reset-group-btn" title="Limpiar marcadores del grupo">&#x21bb;</button>
             </div>
             <div class="group-matches">
-                ${[[0, 1], [2, 3], [0, 2], [1, 3], [0, 3], [1, 2]].map(([i, j]) => {
+                ${[[0, 1], [2, 3], [0, 2], [1, 3], [0, 3], [1, 2]].map(([i, j], matchIndex) => {
         const team1 = group.codes[i], team2 = group.codes[j];
+        const matchId = getGroupPredictionMatchId(group.id, matchIndex);
         return `
-                    <div class="match-grid" data-team1="${team1}" data-team2="${team2}">
+                    <div class="match-grid" data-team1="${team1}" data-team2="${team2}" data-match-id="${matchId}">
                         <span class="team-name local">
   ${TEAMS_DATA[team1].name}
   <span class="team-flag">${TEAMS_DATA[team1].flag}</span>
 </span>
 
-<input type="number" min="0" max="20" step="1" inputmode="numeric" class="score-input">
+<input type="number" min="0" max="20" step="1" inputmode="numeric" class="score-input" aria-label="Resultado final ${TEAMS_DATA[team1].name}">
 <span class="match-separator">-</span>
-<input type="number" min="0" max="20" step="1" inputmode="numeric" class="score-input">
+<input type="number" min="0" max="20" step="1" inputmode="numeric" class="score-input" aria-label="Resultado final ${TEAMS_DATA[team2].name}">
 
 <span class="team-name visitor">
   <span class="team-flag">${TEAMS_DATA[team2].flag}</span>
   ${TEAMS_DATA[team2].name}
 </span>
+${renderPredictionBlock(matchId, team1, team2)}
                     </div>`;
     }).join('')}
             </div>
@@ -781,9 +901,17 @@ function addScrollIndicatorToBracket() {
 function initializeEventListeners() {
     // ... (listener de la fase de grupos, sin cambios) ...
     document.getElementById('groups-container').addEventListener('input', (e) => {
+        if (e.target.classList.contains('prediction-input')) {
+            handlePredictionInput(e.target);
+            updateProgressUI();
+            return;
+        }
+
         if (e.target.classList.contains('score-input')) {
             sanitizeScoreInput(e.target);
-            validateMatchInputs(e.target.closest('.match-grid'));
+            const matchEl = e.target.closest('.match-grid');
+            validateMatchInputs(matchEl);
+            updatePredictionStatusForMatch(matchEl);
             markDirty();
             updateAllCalculations();
             updateProgressUI();
@@ -1709,7 +1837,8 @@ function saveStateToStorage() {
             groupOrders: manualGroupOrders,
             thirdOrder: manualThirdOrder,
             thirdAssignments: manualThirdAssignments
-        }
+        },
+        predictions: userPredictions
     };
 
     // 1. Guardar marcadores de la fase de grupos
@@ -1759,6 +1888,7 @@ function loadStateFromStorage() {
     manualGroupOrders = savedState?.manual?.groupOrders || {};
     manualThirdOrder = savedState?.manual?.thirdOrder || [];
     manualThirdAssignments = savedState?.manual?.thirdAssignments || {};
+    userPredictions = savedState?.predictions || savedState?.userPredictions || {};
 
     // Cargar marcadores de grupos
     if (savedState && savedState.groups) {
@@ -1778,8 +1908,9 @@ function loadStateFromStorage() {
         });
     }
 
-    // Recalcula grupos y puebla el bracket con los equipos iniciales
+    // Recalca grupos y puebla el bracket con los equipos iniciales
     updateAllCalculations();
+    restorePredictionInputs();
 
     // Cargar marcadores del bracket
     if (savedState && savedState.bracket) {

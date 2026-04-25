@@ -1461,3 +1461,164 @@ a{ color: inherit; text-decoration: none; }
     font-size:.68rem;
   }
 }
+
+/* =========================================================
+   Pronósticos personales + hover más legible
+   ========================================================= */
+.match-grid{
+  background: rgba(16, 24, 40, 0.88) !important;
+  border-color: rgba(255,255,255,0.14) !important;
+  filter: none !important;
+  opacity: 1 !important;
+}
+
+.group-card:hover{
+  transform: translateY(-3px) !important;
+  box-shadow:
+    0 20px 62px rgba(0,0,0,.46),
+    0 0 22px rgba(0,229,255,0.08),
+    0 0 24px rgba(255,43,214,0.05) !important;
+  filter: none !important;
+  opacity: 1 !important;
+}
+
+.group-card:hover::before{
+  opacity: .18 !important;
+  filter: blur(7px) !important;
+}
+
+.group-card > *{
+  position: relative;
+  z-index: 1;
+}
+
+.match-grid:hover{
+  transform: translateY(-1px);
+  background: rgba(22, 33, 54, 0.96) !important;
+  border-color: rgba(0,229,255,0.30) !important;
+  box-shadow:
+    0 12px 28px rgba(0,0,0,0.30),
+    0 0 14px rgba(0,229,255,0.09),
+    inset 0 1px 0 rgba(255,255,255,0.14) !important;
+  filter: none !important;
+  opacity: 1 !important;
+}
+
+.match-grid:hover .team-name,
+.match-grid:hover .team-name *,
+.match-grid:hover .prediction-team,
+.match-grid:hover .prediction-team *,
+.match-grid:hover .prediction-title,
+.match-grid:hover .prediction-status{
+  color: rgba(255,255,255,0.96) !important;
+  opacity: 1 !important;
+  filter: none !important;
+}
+
+.prediction-block{
+  grid-column: 1 / -1;
+  margin-top: 8px;
+  padding: 10px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.055);
+  border: 1px dashed rgba(255,255,255,0.16);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+}
+
+.prediction-title{
+  text-align: center;
+  color: rgba(255,255,255,0.82);
+  font-weight: 900;
+  font-size: .78rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  margin-bottom: 7px;
+}
+
+.prediction-row{
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px 14px 44px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.prediction-team{
+  min-width: 0;
+  color: rgba(255,255,255,0.82);
+  font-size: .78rem;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.prediction-home{ text-align: right; }
+.prediction-away{ text-align: left; }
+
+.prediction-code{
+  color: rgba(255,255,255,0.70);
+  font-size: .68rem;
+  margin-right: 3px;
+}
+
+.prediction-input{
+  width: 44px;
+  height: 34px;
+  text-align: center;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.075);
+  color: #ffffff;
+  font-weight: 900;
+  outline: none;
+  box-shadow: inset 0 1px 8px rgba(0,0,0,0.22);
+}
+
+.prediction-input:focus{
+  border-color: rgba(0,229,255,0.55);
+  box-shadow: 0 0 0 3px rgba(0,229,255,0.10), inset 0 1px 8px rgba(0,0,0,0.22);
+}
+
+.prediction-separator{
+  text-align: center;
+  color: rgba(255,255,255,0.80);
+  font-weight: 900;
+}
+
+.prediction-status{
+  margin-top: 8px;
+  padding: 7px 9px;
+  border-radius: 10px;
+  background: rgba(0,0,0,0.18);
+  color: rgba(255,255,255,0.80);
+  text-align: center;
+  font-size: .78rem;
+  font-weight: 800;
+}
+
+.prediction-status.prediction-pending{
+  color: rgba(0,229,255,0.95);
+  background: rgba(0,229,255,0.08);
+  border: 1px solid rgba(0,229,255,0.14);
+}
+
+.prediction-status.prediction-ok{
+  color: rgba(182,255,0,0.95);
+  background: rgba(182,255,0,0.08);
+  border: 1px solid rgba(182,255,0,0.14);
+}
+
+.prediction-status.prediction-empty{
+  color: rgba(255,255,255,0.74);
+}
+
+@media (max-width: 560px){
+  .prediction-row{
+    grid-template-columns: 1fr 40px 12px 40px 1fr;
+    gap: 6px;
+  }
+  .prediction-input{
+    width: 40px;
+  }
+  .prediction-team{
+    font-size: .72rem;
+  }
+}
