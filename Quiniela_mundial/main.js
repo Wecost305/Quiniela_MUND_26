@@ -27,17 +27,33 @@ function getInviteTokenFromUrl() {
     return params.get('invite') || params.get('token'); // ?invite=... ó ?token=...
 }
 
+function normalizeShortAccessToken(raw) {
+    const text = String(raw || '').trim().normalize('NFKC').toUpperCase().replace(/[—–−]/g, '-');
+    if (!text) return null;
+
+    // Acepta token solo, con espacios, sin guiones o pegado dentro de un mensaje de WhatsApp.
+    const compactSource = text.replace(/[^A-Z0-9]/g, '');
+    const match = compactSource.match(/M26([A-HJ-NP-Z2-9]{6})([A-HJ-NP-Z2-9]{5})/);
+    if (!match) return null;
+
+    return `M26-${match[1]}-${match[2]}`;
+}
+
 function extractTokenFromAny(raw) {
-    // Permite pegar: token directo o un link completo
+    // Permite pegar: token directo, mensaje completo de WhatsApp o link antiguo con ?invite= / ?token=.
     const value = (raw || '').trim();
     if (!value) return null;
 
-    // Si es URL, extraemos ?invite= / ?token=
+    const shortToken = normalizeShortAccessToken(value);
+    if (shortToken) return shortToken;
+
+    // Si es URL, extraemos ?invite= / ?token=. El link fijo sin token no activa acceso.
     try {
         const u = new URL(value);
-        return u.searchParams.get('invite') || u.searchParams.get('token') || null;
+        const urlToken = u.searchParams.get('invite') || u.searchParams.get('token');
+        return normalizeShortAccessToken(urlToken) || urlToken || null;
     } catch (e) {
-        // no es URL, asumimos token
+        // Tokens largos anteriores v2 siguen funcionando.
         return value;
     }
 }
@@ -163,7 +179,7 @@ async function redeemFromGate() {
     const token = extractTokenFromAny(raw);
 
     if (!token) {
-        if (err) err.textContent = 'Pega tu token o link de invitación.';
+        if (err) err.textContent = 'Escribe tu token corto de acceso.';
         return;
     }
 

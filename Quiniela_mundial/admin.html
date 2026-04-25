@@ -10,7 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Teko:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
     body{ min-height: 100vh; display:flex; align-items:center; justify-content:center; padding: 18px; }
-    .admin-card{ width:min(920px,100%); background: rgba(255,255,255,.06); border:1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-soft); padding: 18px; }
+    .admin-card{ width:min(980px,100%); background: rgba(255,255,255,.06); border:1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-soft); padding: 18px; }
     .admin-title{ font-family: var(--font-title); font-size: 2.3rem; letter-spacing: .6px; }
     .admin-sub{ color: var(--muted); margin-top: 6px; line-height:1.35; }
     .admin-row{ display:grid; grid-template-columns: 1fr 150px auto; gap: 10px; margin-top: 14px; align-items: stretch; }
@@ -25,15 +25,16 @@
     .token-list table{ width:100%; border-collapse: collapse; font-size: .9rem; }
     .token-list th, .token-list td{ padding: 9px 8px; border-top:1px solid rgba(255,255,255,.08); text-align:left; vertical-align: top; }
     .token-list th{ position: sticky; top:0; background: rgba(12,15,34,.96); color: rgba(255,255,255,.72); }
-    .token-list code{ color: rgba(182,255,0,.94); }
+    .token-list code{ color: rgba(182,255,0,.94); font-size: 1rem; font-weight: 800; letter-spacing: .5px; }
+    .fixed-url{ color: rgba(255,255,255,.92); font-weight: 700; }
     @media (max-width: 720px){ .admin-row{ grid-template-columns: 1fr; } .admin-actions .knockout-stage-btn, .token-tools .knockout-stage-btn, .token-tools .btn{ width:100%; } }
   </style>
 </head>
 <body>
   <div class="admin-card">
-    <div class="admin-title">Admin — Invitaciones</div>
+    <div class="admin-title">Admin — Tokens de acceso</div>
     <div class="admin-sub">
-      Genera links de <b>un solo uso</b> para activar un dispositivo. Puedes crear 1, 100, 200 o hasta 500 tokens por lote para tenerlos listos y mandarlos rápido por WhatsApp.
+      Genera <b>tokens cortos de un solo uso</b> para activar un dispositivo. El link de acceso se mantiene igual: <b>https://quinmund26.netlify.app/</b>. Puedes crear 1, 100, 200 o hasta 500 tokens por lote para tenerlos listos y mandarlos rápido por WhatsApp.
     </div>
 
     <div class="admin-row">
@@ -43,7 +44,7 @@
     </div>
 
     <div class="admin-actions">
-      <span class="chip">📌 Un link por persona/dispositivo</span>
+      <span class="chip">📌 Un token por persona/dispositivo</span>
       <span class="chip">🧾 Puedes descargar CSV del lote</span>
       <span class="chip">🔒 No compartas tu ADMIN_KEY</span>
     </div>
@@ -51,15 +52,15 @@
     <div id="err" class="admin-err"></div>
 
     <div id="out" class="admin-out" style="display:none;">
-      <div><b id="batchTitle">Invitaciones creadas:</b></div>
+      <div><b id="batchTitle">Tokens creados:</b></div>
       <div class="token-tools">
-        <button id="btnCopy" class="knockout-stage-btn" type="button">Copiar links</button>
+        <button id="btnCopy" class="knockout-stage-btn" type="button">Copiar mensajes</button>
         <button id="btnDownload" class="btn" type="button">Descargar CSV</button>
         <button id="btnNew" class="btn" type="button">Crear otro lote</button>
       </div>
       <div class="token-list">
         <table>
-          <thead><tr><th>#</th><th>Token</th><th>Link</th><th>UserId</th></tr></thead>
+          <thead><tr><th>#</th><th>Token corto</th><th>Link fijo</th><th>Mensaje para WhatsApp</th></tr></thead>
           <tbody id="tokenRows"></tbody>
         </table>
       </div>
@@ -109,31 +110,40 @@
           return;
         }
 
-        lastInvitations = Array.isArray(data.invitations) ? data.invitations : (data.inviteUrl ? [data] : []);
+        lastInvitations = Array.isArray(data.invitations) ? data.invitations : (data.token ? [data] : []);
         renderInvitations(lastInvitations);
         out.style.display = 'block';
       }catch(e){
-        err.textContent = 'No se pudo conectar a las Functions. Asegúrate de estar en Netlify (o netlify dev).';
+        err.textContent = 'No se pudo conectar a las Functions. Asegúrate de estar en Netlify o netlify dev.';
       } finally {
         btn.disabled = false;
         btn.textContent = 'Crear';
       }
     }
 
+    function getSiteUrl(item){
+      return item.siteUrl || item.inviteUrl || 'https://quinmund26.netlify.app/';
+    }
+
+    function getWhatsAppMessage(item){
+      const siteUrl = getSiteUrl(item);
+      return item.whatsappText || `Fixture Mundialista 2026: ${siteUrl} Token: ${item.token || ''}`;
+    }
+
     function renderInvitations(invitations){
-      document.getElementById('batchTitle').textContent = `Invitaciones creadas: ${invitations.length}`;
+      document.getElementById('batchTitle').textContent = `Tokens creados: ${invitations.length}`;
       document.getElementById('tokenRows').innerHTML = invitations.map((item, index) => `
         <tr>
           <td>${index + 1}</td>
           <td><code>${item.token || ''}</code></td>
-          <td>${item.inviteUrl || ''}</td>
-          <td>${item.userId || ''}</td>
+          <td><span class="fixed-url">${getSiteUrl(item)}</span></td>
+          <td>${getWhatsAppMessage(item)}</td>
         </tr>
       `).join('');
     }
 
     async function copyInvite(){
-      const text = lastInvitations.map(x => x.inviteUrl).filter(Boolean).join('\n');
+      const text = lastInvitations.map(getWhatsAppMessage).filter(Boolean).join('\n');
       if(!text) return;
       try{
         await navigator.clipboard.writeText(text);
@@ -149,12 +159,13 @@
 
     function downloadCSV(){
       if(!lastInvitations.length) return;
-      const header = 'numero,token,userId,inviteUrl\n';
+      const header = 'numero,token,linkFijo,mensajeWhatsApp,userId\n';
       const rows = lastInvitations.map((item, index) => [
         index + 1,
         item.token || '',
-        item.userId || '',
-        item.inviteUrl || ''
+        getSiteUrl(item),
+        getWhatsAppMessage(item),
+        item.userId || ''
       ].map(v => '"' + String(v).replaceAll('"','""') + '"').join(',')).join('\n');
       const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8' });
       const url = URL.createObjectURL(blob);
