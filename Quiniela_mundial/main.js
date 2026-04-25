@@ -93,7 +93,11 @@ function showAuthGate(msg) {
     const gate = document.getElementById('auth-gate');
     const err = document.getElementById('auth-gate-error');
     if (!gate) return;
+
+    gate.hidden = false;
+    gate.style.display = 'flex';
     gate.classList.remove('is-hidden');
+
     if (err) err.textContent = msg || '';
 }
 
@@ -101,7 +105,11 @@ function hideAuthGate() {
     const gate = document.getElementById('auth-gate');
     const err = document.getElementById('auth-gate-error');
     if (!gate) return;
+
     gate.classList.add('is-hidden');
+    gate.hidden = true;
+    gate.style.display = 'none';
+
     if (err) err.textContent = '';
 }
 
@@ -189,6 +197,8 @@ async function redeemFromGate() {
         await redeemInvite(token);
         hideAuthGate();
         if (!appInitialized) initApp();
+        // Refuerzo visual: evita que el modal quede encima si el navegador mantiene estilos previos en caché.
+        setTimeout(hideAuthGate, 0);
     } catch (e) {
         if (err) err.textContent = e.message || 'No se pudo validar el token.';
     } finally {
