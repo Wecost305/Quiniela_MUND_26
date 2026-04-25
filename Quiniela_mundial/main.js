@@ -19,6 +19,201 @@ let manualThirdAssignments = {};
 // No afectan el cálculo FIFA ni la fase eliminatoria; solo sirven como referencia personal.
 let userPredictions = {};
 
+
+// Calendario mostrado en hora local de Ciudad de México (CDMX).
+// Si existe window.MATCH_SCHEDULE se usa ese; si no, esta copia interna evita depender de otro archivo.
+const MATCH_SCHEDULE_FALLBACK = {
+  groups: {
+    A: [
+      { no: 1, date: 'Jue 11 junio 2026', time: '13:00 CDMX', venue: 'Estadio Azteca', city: 'Ciudad de México' },
+      { no: 2, date: 'Jue 11 junio 2026', time: '20:00 CDMX', venue: 'Estadio Akron', city: 'Guadalajara' },
+      { no: 28, date: 'Jue 18 junio 2026', time: '19:00 CDMX', venue: 'Estadio Akron', city: 'Guadalajara' },
+      { no: 25, date: 'Jue 18 junio 2026', time: '10:00 CDMX', venue: 'Mercedes-Benz Stadium', city: 'Atlanta' },
+      { no: 53, date: 'Mié 24 junio 2026', time: '19:00 CDMX', venue: 'Estadio Azteca', city: 'Ciudad de México' },
+      { no: 54, date: 'Mié 24 junio 2026', time: '19:00 CDMX', venue: 'Estadio BBVA', city: 'Monterrey' },
+    ],
+    B: [
+      { no: 3, date: 'Vie 12 junio 2026', time: '13:00 CDMX', venue: 'BMO Field', city: 'Toronto' },
+      { no: 8, date: 'Sáb 13 junio 2026', time: '13:00 CDMX', venue: "Levi's Stadium", city: 'San Francisco Bay Area' },
+      { no: 27, date: 'Jue 18 junio 2026', time: '16:00 CDMX', venue: 'BC Place', city: 'Vancouver' },
+      { no: 26, date: 'Jue 18 junio 2026', time: '13:00 CDMX', venue: 'SoFi Stadium', city: 'Los Ángeles' },
+      { no: 51, date: 'Mié 24 junio 2026', time: '13:00 CDMX', venue: 'BC Place', city: 'Vancouver' },
+      { no: 52, date: 'Mié 24 junio 2026', time: '13:00 CDMX', venue: 'Lumen Field', city: 'Seattle' },
+    ],
+    C: [
+      { no: 7, date: 'Sáb 13 junio 2026', time: '16:00 CDMX', venue: 'MetLife Stadium', city: 'New York/New Jersey' },
+      { no: 5, date: 'Sáb 13 junio 2026', time: '19:00 CDMX', venue: 'Gillette Stadium', city: 'Boston' },
+      { no: 29, date: 'Vie 19 junio 2026', time: '19:00 CDMX', venue: 'Lincoln Financial Field', city: 'Philadelphia' },
+      { no: 30, date: 'Vie 19 junio 2026', time: '16:00 CDMX', venue: 'Gillette Stadium', city: 'Boston' },
+      { no: 49, date: 'Mié 24 junio 2026', time: '16:00 CDMX', venue: 'Hard Rock Stadium', city: 'Miami' },
+      { no: 50, date: 'Mié 24 junio 2026', time: '16:00 CDMX', venue: 'Mercedes-Benz Stadium', city: 'Atlanta' },
+    ],
+    D: [
+      { no: 4, date: 'Vie 12 junio 2026', time: '19:00 CDMX', venue: 'SoFi Stadium', city: 'Los Ángeles' },
+      { no: 6, date: 'Vie 12 junio 2026', time: '22:00 CDMX', venue: 'BC Place', city: 'Vancouver' },
+      { no: 32, date: 'Vie 19 junio 2026', time: '13:00 CDMX', venue: 'Lumen Field', city: 'Seattle' },
+      { no: 31, date: 'Vie 19 junio 2026', time: '21:00 CDMX', venue: "Levi's Stadium", city: 'San Francisco Bay Area' },
+      { no: 59, date: 'Jue 25 junio 2026', time: '20:00 CDMX', venue: 'SoFi Stadium', city: 'Los Ángeles' },
+      { no: 60, date: 'Jue 25 junio 2026', time: '20:00 CDMX', venue: "Levi's Stadium", city: 'San Francisco Bay Area' },
+    ],
+    E: [
+      { no: 10, date: 'Dom 14 junio 2026', time: '11:00 CDMX', venue: 'NRG Stadium', city: 'Houston' },
+      { no: 9, date: 'Dom 14 junio 2026', time: '17:00 CDMX', venue: 'Lincoln Financial Field', city: 'Philadelphia' },
+      { no: 33, date: 'Sáb 20 junio 2026', time: '14:00 CDMX', venue: 'BMO Field', city: 'Toronto' },
+      { no: 34, date: 'Sáb 20 junio 2026', time: '18:00 CDMX', venue: 'Arrowhead Stadium', city: 'Kansas City' },
+      { no: 56, date: 'Jue 25 junio 2026', time: '14:00 CDMX', venue: 'MetLife Stadium', city: 'New York/New Jersey' },
+      { no: 55, date: 'Jue 25 junio 2026', time: '14:00 CDMX', venue: 'Lincoln Financial Field', city: 'Philadelphia' },
+    ],
+    F: [
+      { no: 11, date: 'Dom 14 junio 2026', time: '14:00 CDMX', venue: 'AT&T Stadium', city: 'Dallas' },
+      { no: 12, date: 'Dom 14 junio 2026', time: '20:00 CDMX', venue: 'Estadio BBVA', city: 'Monterrey' },
+      { no: 35, date: 'Sáb 20 junio 2026', time: '11:00 CDMX', venue: 'NRG Stadium', city: 'Houston' },
+      { no: 36, date: 'Vie 19 junio 2026', time: '22:00 CDMX', venue: 'Estadio BBVA', city: 'Monterrey' },
+      { no: 58, date: 'Jue 25 junio 2026', time: '17:00 CDMX', venue: 'Arrowhead Stadium', city: 'Kansas City' },
+      { no: 57, date: 'Jue 25 junio 2026', time: '17:00 CDMX', venue: 'AT&T Stadium', city: 'Dallas' },
+    ],
+    G: [
+      { no: 16, date: 'Lun 15 junio 2026', time: '13:00 CDMX', venue: 'Lumen Field', city: 'Seattle' },
+      { no: 15, date: 'Lun 15 junio 2026', time: '19:00 CDMX', venue: 'SoFi Stadium', city: 'Los Ángeles' },
+      { no: 39, date: 'Dom 21 junio 2026', time: '13:00 CDMX', venue: 'SoFi Stadium', city: 'Los Ángeles' },
+      { no: 40, date: 'Dom 21 junio 2026', time: '19:00 CDMX', venue: 'BC Place', city: 'Vancouver' },
+      { no: 64, date: 'Vie 26 junio 2026', time: '21:00 CDMX', venue: 'BC Place', city: 'Vancouver' },
+      { no: 63, date: 'Vie 26 junio 2026', time: '21:00 CDMX', venue: 'Lumen Field', city: 'Seattle' },
+    ],
+    H: [
+      { no: 14, date: 'Lun 15 junio 2026', time: '10:00 CDMX', venue: 'Mercedes-Benz Stadium', city: 'Atlanta' },
+      { no: 13, date: 'Lun 15 junio 2026', time: '16:00 CDMX', venue: 'Hard Rock Stadium', city: 'Miami' },
+      { no: 38, date: 'Dom 21 junio 2026', time: '10:00 CDMX', venue: 'Mercedes-Benz Stadium', city: 'Atlanta' },
+      { no: 37, date: 'Dom 21 junio 2026', time: '16:00 CDMX', venue: 'Hard Rock Stadium', city: 'Miami' },
+      { no: 66, date: 'Vie 26 junio 2026', time: '18:00 CDMX', venue: 'Estadio Akron', city: 'Guadalajara' },
+      { no: 65, date: 'Vie 26 junio 2026', time: '18:00 CDMX', venue: 'NRG Stadium', city: 'Houston' },
+    ],
+    I: [
+      { no: 17, date: 'Mar 16 junio 2026', time: '13:00 CDMX', venue: 'MetLife Stadium', city: 'New York/New Jersey' },
+      { no: 18, date: 'Mar 16 junio 2026', time: '16:00 CDMX', venue: 'Gillette Stadium', city: 'Boston' },
+      { no: 42, date: 'Lun 22 junio 2026', time: '15:00 CDMX', venue: 'Lincoln Financial Field', city: 'Philadelphia' },
+      { no: 41, date: 'Lun 22 junio 2026', time: '18:00 CDMX', venue: 'MetLife Stadium', city: 'New York/New Jersey' },
+      { no: 61, date: 'Vie 26 junio 2026', time: '13:00 CDMX', venue: 'Gillette Stadium', city: 'Boston' },
+      { no: 62, date: 'Vie 26 junio 2026', time: '13:00 CDMX', venue: 'BMO Field', city: 'Toronto' },
+    ],
+    J: [
+      { no: 19, date: 'Mar 16 junio 2026', time: '19:00 CDMX', venue: 'Arrowhead Stadium', city: 'Kansas City' },
+      { no: 20, date: 'Mar 16 junio 2026', time: '22:00 CDMX', venue: "Levi's Stadium", city: 'San Francisco Bay Area' },
+      { no: 43, date: 'Lun 22 junio 2026', time: '11:00 CDMX', venue: 'AT&T Stadium', city: 'Dallas' },
+      { no: 44, date: 'Lun 22 junio 2026', time: '21:00 CDMX', venue: "Levi's Stadium", city: 'San Francisco Bay Area' },
+      { no: 70, date: 'Sáb 27 junio 2026', time: '20:00 CDMX', venue: 'AT&T Stadium', city: 'Dallas' },
+      { no: 69, date: 'Sáb 27 junio 2026', time: '20:00 CDMX', venue: 'Arrowhead Stadium', city: 'Kansas City' },
+    ],
+    K: [
+      { no: 23, date: 'Mié 17 junio 2026', time: '11:00 CDMX', venue: 'NRG Stadium', city: 'Houston' },
+      { no: 24, date: 'Mié 17 junio 2026', time: '20:00 CDMX', venue: 'Estadio Azteca', city: 'Ciudad de México' },
+      { no: 47, date: 'Mar 23 junio 2026', time: '11:00 CDMX', venue: 'NRG Stadium', city: 'Houston' },
+      { no: 48, date: 'Mar 23 junio 2026', time: '20:00 CDMX', venue: 'Estadio Akron', city: 'Guadalajara' },
+      { no: 71, date: 'Sáb 27 junio 2026', time: '17:30 CDMX', venue: 'Hard Rock Stadium', city: 'Miami' },
+      { no: 72, date: 'Sáb 27 junio 2026', time: '17:30 CDMX', venue: 'Mercedes-Benz Stadium', city: 'Atlanta' },
+    ],
+    L: [
+      { no: 22, date: 'Mié 17 junio 2026', time: '14:00 CDMX', venue: 'AT&T Stadium', city: 'Dallas' },
+      { no: 21, date: 'Mié 17 junio 2026', time: '17:00 CDMX', venue: 'BMO Field', city: 'Toronto' },
+      { no: 45, date: 'Mar 23 junio 2026', time: '14:00 CDMX', venue: 'Gillette Stadium', city: 'Boston' },
+      { no: 46, date: 'Mar 23 junio 2026', time: '17:00 CDMX', venue: 'BMO Field', city: 'Toronto' },
+      { no: 67, date: 'Sáb 27 junio 2026', time: '15:00 CDMX', venue: 'MetLife Stadium', city: 'New York/New Jersey' },
+      { no: 68, date: 'Sáb 27 junio 2026', time: '15:00 CDMX', venue: 'Lincoln Financial Field', city: 'Philadelphia' },
+    ],
+  },
+  bracket: {
+    '16-1': { no: 73, date: 'Dom 28 junio 2026', time: '13:00 CDMX', venue: 'SoFi Stadium', city: 'Los Ángeles' },
+    '16-2': { no: 74, date: 'Lun 29 junio 2026', time: '14:30 CDMX', venue: 'Gillette Stadium', city: 'Boston' },
+    '16-3': { no: 75, date: 'Lun 29 junio 2026', time: '19:00 CDMX', venue: 'Estadio BBVA', city: 'Monterrey' },
+    '16-4': { no: 76, date: 'Lun 29 junio 2026', time: '11:00 CDMX', venue: 'NRG Stadium', city: 'Houston' },
+    '16-5': { no: 77, date: 'Mar 30 junio 2026', time: '15:00 CDMX', venue: 'MetLife Stadium', city: 'New York/New Jersey' },
+    '16-6': { no: 78, date: 'Mar 30 junio 2026', time: '11:00 CDMX', venue: 'AT&T Stadium', city: 'Dallas' },
+    '16-7': { no: 79, date: 'Mar 30 junio 2026', time: '19:00 CDMX', venue: 'Estadio Azteca', city: 'Ciudad de México' },
+    '16-8': { no: 80, date: 'Mié 1 julio 2026', time: '10:00 CDMX', venue: 'Mercedes-Benz Stadium', city: 'Atlanta' },
+    '16-9': { no: 81, date: 'Mié 1 julio 2026', time: '18:00 CDMX', venue: "Levi's Stadium", city: 'San Francisco Bay Area' },
+    '16-10': { no: 82, date: 'Mié 1 julio 2026', time: '14:00 CDMX', venue: 'Lumen Field', city: 'Seattle' },
+    '16-11': { no: 83, date: 'Jue 2 julio 2026', time: '17:00 CDMX', venue: 'BMO Field', city: 'Toronto' },
+    '16-12': { no: 84, date: 'Jue 2 julio 2026', time: '13:00 CDMX', venue: 'SoFi Stadium', city: 'Los Ángeles' },
+    '16-13': { no: 85, date: 'Jue 2 julio 2026', time: '21:00 CDMX', venue: 'BC Place', city: 'Vancouver' },
+    '16-14': { no: 86, date: 'Vie 3 julio 2026', time: '16:00 CDMX', venue: 'Hard Rock Stadium', city: 'Miami' },
+    '16-15': { no: 87, date: 'Vie 3 julio 2026', time: '19:30 CDMX', venue: 'Arrowhead Stadium', city: 'Kansas City' },
+    '16-16': { no: 88, date: 'Vie 3 julio 2026', time: '12:00 CDMX', venue: 'AT&T Stadium', city: 'Dallas' },
+    '8-1': { no: 89, date: 'Sáb 4 julio 2026', time: '15:00 CDMX', venue: 'Lincoln Financial Field', city: 'Philadelphia' },
+    '8-2': { no: 90, date: 'Sáb 4 julio 2026', time: '11:00 CDMX', venue: 'NRG Stadium', city: 'Houston' },
+    '8-3': { no: 91, date: 'Dom 5 julio 2026', time: '14:00 CDMX', venue: 'MetLife Stadium', city: 'New York/New Jersey' },
+    '8-4': { no: 92, date: 'Dom 5 julio 2026', time: '18:00 CDMX', venue: 'Estadio Azteca', city: 'Ciudad de México' },
+    '8-5': { no: 93, date: 'Lun 6 julio 2026', time: '13:00 CDMX', venue: 'AT&T Stadium', city: 'Dallas' },
+    '8-6': { no: 94, date: 'Lun 6 julio 2026', time: '18:00 CDMX', venue: 'Lumen Field', city: 'Seattle' },
+    '8-7': { no: 95, date: 'Mar 7 julio 2026', time: '10:00 CDMX', venue: 'Mercedes-Benz Stadium', city: 'Atlanta' },
+    '8-8': { no: 96, date: 'Mar 7 julio 2026', time: '14:00 CDMX', venue: 'BC Place', city: 'Vancouver' },
+    '4-1': { no: 97, date: 'Jue 9 julio 2026', time: '14:00 CDMX', venue: 'Gillette Stadium', city: 'Boston' },
+    '4-2': { no: 99, date: 'Sáb 11 julio 2026', time: '15:00 CDMX', venue: 'Hard Rock Stadium', city: 'Miami' },
+    '4-3': { no: 98, date: 'Vie 10 julio 2026', time: '13:00 CDMX', venue: 'SoFi Stadium', city: 'Los Ángeles' },
+    '4-4': { no: 100, date: 'Sáb 11 julio 2026', time: '19:00 CDMX', venue: 'Arrowhead Stadium', city: 'Kansas City' },
+    '2-1': { no: 101, date: 'Mar 14 julio 2026', time: '13:00 CDMX', venue: 'AT&T Stadium', city: 'Dallas' },
+    '2-2': { no: 102, date: 'Mié 15 julio 2026', time: '13:00 CDMX', venue: 'Mercedes-Benz Stadium', city: 'Atlanta' },
+    '3-1': { no: 103, date: 'Sáb 18 julio 2026', time: '15:00 CDMX', venue: 'Hard Rock Stadium', city: 'Miami' },
+    '1-1': { no: 104, date: 'Dom 19 julio 2026', time: '13:00 CDMX', venue: 'MetLife Stadium', city: 'New York/New Jersey' },
+  }
+};
+
+function getScheduleData() {
+    return (window.MATCH_SCHEDULE && window.MATCH_SCHEDULE.groups) ? window.MATCH_SCHEDULE : MATCH_SCHEDULE_FALLBACK;
+}
+
+function escapeHTML(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function getTeamDisplayName(code) {
+    return TEAMS_DATA[code]?.name || code;
+}
+
+function getTeamFlag(code) {
+    return TEAMS_DATA[code]?.flag || '';
+}
+
+function renderGroupMatchMeta(groupId, matchIndex) {
+    const item = getScheduleData()?.groups?.[groupId]?.[matchIndex];
+    if (!item) return '';
+    const no = item.no ? `M${item.no}` : '';
+    const main = [item.date, item.time].filter(Boolean).join(' · ');
+    const place = [item.venue, item.city].filter(Boolean).join(' · ');
+    return `
+        <div class="group-match-meta">
+            <div class="group-match-meta-main">
+                ${no ? `<span class="match-no-badge">${escapeHTML(no)}</span>` : ''}
+                <span>${escapeHTML(main)}</span>
+            </div>
+            ${place ? `<div class="group-match-venue">${escapeHTML(place)}</div>` : ''}
+        </div>`;
+}
+
+function renderTeamName(code, side) {
+    const name = getTeamDisplayName(code);
+    const flag = getTeamFlag(code);
+    const safeName = escapeHTML(name);
+    const safeCode = escapeHTML(code);
+    const safeFlag = escapeHTML(flag);
+    if (side === 'local') {
+        return `<span class="team-name local" title="${safeName}">
+            <span class="team-label">${safeName}</span>
+            <span class="team-flag" aria-hidden="true">${safeFlag}</span>
+            <span class="team-code-mini">${safeCode}</span>
+        </span>`;
+    }
+    return `<span class="team-name visitor" title="${safeName}">
+        <span class="team-code-mini">${safeCode}</span>
+        <span class="team-flag" aria-hidden="true">${safeFlag}</span>
+        <span class="team-label">${safeName}</span>
+    </span>`;
+}
+
 const THIRD_ASSIGNMENT_SLOTS = [
     { matchId: '16-2',  matchNo: 'M74', winnerGroup: 'E', label: '1E vs 3º A/B/C/D/F', allowed: ['A','B','C','D','F'] },
     { matchId: '16-5',  matchNo: 'M77', winnerGroup: 'I', label: '1I vs 3º C/D/F/G/H', allowed: ['C','D','F','G','H'] },
@@ -594,15 +789,21 @@ function getGroupPredictionMatchId(groupId, matchIndex) {
 }
 
 function renderPredictionBlock(matchId, team1, team2) {
+    const homeName = getTeamDisplayName(team1);
+    const awayName = getTeamDisplayName(team2);
+    const safeHomeName = escapeHTML(homeName);
+    const safeAwayName = escapeHTML(awayName);
+    const safeTeam1 = escapeHTML(team1);
+    const safeTeam2 = escapeHTML(team2);
     return `
-        <div class="prediction-block" data-prediction-match="${matchId}">
+        <div class="prediction-block" data-prediction-match="${escapeHTML(matchId)}">
             <div class="prediction-title">MI PRONÓSTICO</div>
             <div class="prediction-row">
-                <span class="prediction-team prediction-home"><span class="prediction-code">${team1}</span> ${TEAMS_DATA[team1].name}</span>
-                <input type="number" min="0" max="20" step="1" inputmode="numeric" class="prediction-input" data-side="home" aria-label="Pronóstico ${TEAMS_DATA[team1].name}">
+                <span class="prediction-team prediction-home" title="${safeHomeName}"><span class="prediction-code">${safeTeam1}</span><span class="prediction-name">${safeHomeName}</span></span>
+                <input type="number" min="0" max="20" step="1" inputmode="numeric" class="prediction-input" data-side="home" aria-label="Pronóstico ${safeHomeName}">
                 <span class="prediction-separator">-</span>
-                <input type="number" min="0" max="20" step="1" inputmode="numeric" class="prediction-input" data-side="away" aria-label="Pronóstico ${TEAMS_DATA[team2].name}">
-                <span class="prediction-team prediction-away"><span class="prediction-code">${team2}</span> ${TEAMS_DATA[team2].name}</span>
+                <input type="number" min="0" max="20" step="1" inputmode="numeric" class="prediction-input" data-side="away" aria-label="Pronóstico ${safeAwayName}">
+                <span class="prediction-team prediction-away" title="${safeAwayName}"><span class="prediction-code">${safeTeam2}</span><span class="prediction-name">${safeAwayName}</span></span>
             </div>
             <div class="prediction-status" data-prediction-status>Agrega tu pronóstico antes del partido.</div>
         </div>`;
@@ -716,21 +917,14 @@ function generateGroupsHTML() {
         const team1 = group.codes[i], team2 = group.codes[j];
         const matchId = getGroupPredictionMatchId(group.id, matchIndex);
         return `
-                    <div class="match-grid" data-team1="${team1}" data-team2="${team2}" data-match-id="${matchId}">
-                        <span class="team-name local">
-  ${TEAMS_DATA[team1].name}
-  <span class="team-flag">${TEAMS_DATA[team1].flag}</span>
-</span>
-
-<input type="number" min="0" max="20" step="1" inputmode="numeric" class="score-input" aria-label="Resultado final ${TEAMS_DATA[team1].name}">
-<span class="match-separator">-</span>
-<input type="number" min="0" max="20" step="1" inputmode="numeric" class="score-input" aria-label="Resultado final ${TEAMS_DATA[team2].name}">
-
-<span class="team-name visitor">
-  <span class="team-flag">${TEAMS_DATA[team2].flag}</span>
-  ${TEAMS_DATA[team2].name}
-</span>
-${renderPredictionBlock(matchId, team1, team2)}
+                    <div class="match-grid" data-team1="${escapeHTML(team1)}" data-team2="${escapeHTML(team2)}" data-match-id="${escapeHTML(matchId)}">
+                        ${renderGroupMatchMeta(group.id, matchIndex)}
+                        ${renderTeamName(team1, 'local')}
+                        <input type="number" min="0" max="20" step="1" inputmode="numeric" class="score-input" aria-label="Resultado final ${escapeHTML(getTeamDisplayName(team1))}">
+                        <span class="match-separator">-</span>
+                        <input type="number" min="0" max="20" step="1" inputmode="numeric" class="score-input" aria-label="Resultado final ${escapeHTML(getTeamDisplayName(team2))}">
+                        ${renderTeamName(team2, 'visitor')}
+                        ${renderPredictionBlock(matchId, team1, team2)}
                     </div>`;
     }).join('')}
             </div>

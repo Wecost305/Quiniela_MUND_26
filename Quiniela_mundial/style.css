@@ -1622,3 +1622,175 @@ a{ color: inherit; text-decoration: none; }
     font-size: .72rem;
   }
 }
+
+
+/* =========================================================
+   Corrección: fecha/hora/lugar + nombres largos sin desbordarse
+   ========================================================= */
+.match-grid{
+  grid-template-columns: minmax(0, 1fr) 44px 14px 44px minmax(0, 1fr) !important;
+  row-gap: 8px !important;
+  overflow: hidden !important;
+}
+
+.group-match-meta{
+  grid-column: 1 / -1;
+  min-width: 0;
+  text-align: center;
+  margin-bottom: 2px;
+  line-height: 1.2;
+}
+
+.group-match-meta-main{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  max-width: 100%;
+  color: rgba(255,255,255,0.88);
+  font-weight: 900;
+  font-size: 0.78rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.match-no-badge{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  color: rgba(255,255,255,0.94);
+  background: rgba(0,229,255,0.18);
+  border: 1px solid rgba(0,229,255,0.28);
+  box-shadow: 0 0 16px rgba(0,229,255,0.10);
+  flex: 0 0 auto;
+}
+
+.group-match-venue{
+  margin-top: 4px;
+  color: rgba(255,255,255,0.62);
+  font-size: 0.68rem;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.team-name{
+  overflow: hidden !important;
+  max-width: 100% !important;
+  font-size: 0.92rem;
+  line-height: 1.12;
+}
+
+.team-label{
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.team-code-mini{
+  display: none !important;
+}
+
+.team-name.local .team-label{
+  text-align: right;
+}
+
+.team-name.visitor .team-label{
+  text-align: left;
+}
+
+.prediction-team{
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  max-width: 100%;
+  white-space: nowrap;
+}
+
+.prediction-home{
+  justify-content: flex-end;
+}
+
+.prediction-away{
+  justify-content: flex-start;
+}
+
+.prediction-name{
+  display: inline-block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prediction-code{
+  flex: 0 0 auto;
+}
+
+/* Hover más claro: se nota el cursor, pero no apaga el contenido */
+.group-card:hover{
+  filter: none !important;
+  opacity: 1 !important;
+}
+
+.group-card:hover::before{
+  opacity: 0.10 !important;
+  filter: blur(5px) !important;
+}
+
+.match-grid:hover{
+  background: rgba(24, 34, 54, 0.98) !important;
+  border-color: rgba(0,229,255,0.24) !important;
+  filter: none !important;
+  opacity: 1 !important;
+}
+
+.match-grid:hover .group-match-meta-main,
+.match-grid:hover .group-match-venue,
+.match-grid:hover .team-label,
+.match-grid:hover .team-flag,
+.match-grid:hover .prediction-name,
+.match-grid:hover .prediction-code,
+.match-grid:hover .prediction-title,
+.match-grid:hover .prediction-status{
+  opacity: 1 !important;
+  filter: none !important;
+}
+
+@media (max-width: 560px){
+  .match-grid{
+    grid-template-columns: minmax(0, 1fr) 40px 12px 40px minmax(0, 1fr) !important;
+    column-gap: 6px !important;
+    padding: 8px 8px !important;
+  }
+
+  .group-match-meta-main{
+    font-size: 0.70rem;
+    gap: 5px;
+  }
+
+  .match-no-badge{
+    min-width: 30px;
+    height: 20px;
+    padding: 0 6px;
+  }
+
+  .group-match-venue{
+    font-size: 0.63rem;
+  }
+
+  .team-name{
+    font-size: 0.82rem;
+  }
+}
