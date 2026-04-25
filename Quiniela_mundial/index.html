@@ -210,12 +210,16 @@
 
     <!-- Modal de Exportación -->
     <div id="export-modal" class="modal-overlay" style="display: none; z-index: 2500;">
-        <div class="modal-content export-modal" style="max-width: 520px; height: auto;">
+        <div class="modal-content export-modal" style="max-width: 560px; height: auto;">
             <button class="modal-close-btn" id="export-close" aria-label="Cerrar">&times;</button>
             <h2 class="section-title" style="margin-top: 0;">EXPORTAR</h2>
-            <p class="export-help">Exporta tu fixture como imagen para compartirla sin dar acceso de edición.</p>
+            <p class="export-help">Exporta tu fixture como imagen para compartirla sin dar acceso de edición. Ahora puedes bajar cada grupo por separado para que se vea más claro.</p>
             <div class="export-actions">
-                <button class="knockout-stage-btn" type="button" id="export-groups">Exportar Grupos (PNG)</button>
+                <button class="knockout-stage-btn" type="button" id="export-groups-all">Exportar todos los grupos por separado</button>
+                <div class="export-group-picker">
+                    <div class="export-group-picker-title">O exporta solo un grupo:</div>
+                    <div id="export-group-grid" class="export-group-grid"></div>
+                </div>
                 <button class="knockout-stage-btn" type="button" id="export-bracket">Exportar Eliminatoria (PNG)</button>
                 <button class="btn" type="button" id="export-cancel">Cancelar</button>
             </div>

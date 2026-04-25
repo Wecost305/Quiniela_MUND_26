@@ -93,11 +93,7 @@ function showAuthGate(msg) {
     const gate = document.getElementById('auth-gate');
     const err = document.getElementById('auth-gate-error');
     if (!gate) return;
-
-    gate.hidden = false;
-    gate.style.display = 'flex';
     gate.classList.remove('is-hidden');
-
     if (err) err.textContent = msg || '';
 }
 
@@ -105,11 +101,7 @@ function hideAuthGate() {
     const gate = document.getElementById('auth-gate');
     const err = document.getElementById('auth-gate-error');
     if (!gate) return;
-
     gate.classList.add('is-hidden');
-    gate.hidden = true;
-    gate.style.display = 'none';
-
     if (err) err.textContent = '';
 }
 
@@ -197,8 +189,6 @@ async function redeemFromGate() {
         await redeemInvite(token);
         hideAuthGate();
         if (!appInitialized) initApp();
-        // Refuerzo visual: evita que el modal quede encima si el navegador mantiene estilos previos en caché.
-        setTimeout(hideAuthGate, 0);
     } catch (e) {
         if (err) err.textContent = e.message || 'No se pudo validar el token.';
     } finally {
@@ -382,6 +372,27 @@ function closeExportModal() {
     if (m) m.style.display = 'none';
 }
 
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function syncFormValues(sourceRoot, cloneRoot) {
+    const sourceInputs = Array.from(sourceRoot.querySelectorAll('input, textarea, select'));
+    const cloneInputs = Array.from(cloneRoot.querySelectorAll('input, textarea, select'));
+    sourceInputs.forEach((src, i) => {
+        const dst = cloneInputs[i];
+        if (!dst) return;
+        if (src.type === 'checkbox' || src.type === 'radio') {
+            dst.checked = src.checked;
+            if (src.checked) dst.setAttribute('checked', 'checked');
+            else dst.removeAttribute('checked');
+            return;
+        }
+        dst.value = src.value;
+        if (src.value !== undefined) dst.setAttribute('value', src.value);
+    });
+}
+
 async function exportElementToPNG(element, filenameBase) {
     if (!element) return;
     if (typeof html2canvas !== 'function') {
@@ -389,7 +400,7 @@ async function exportElementToPNG(element, filenameBase) {
         return;
     }
 
-    const scale = Math.min(2, window.devicePixelRatio || 1);
+    const scale = Math.max(2, Math.min(3, window.devicePixelRatio || 1));
     const canvas = await html2canvas(element, {
         backgroundColor: '#070A14',
         scale,
@@ -404,10 +415,70 @@ async function exportElementToPNG(element, filenameBase) {
     link.click();
 }
 
-async function exportGroupsPNG() {
+async function exportCardLikePNG(sourceElement, filenameBase, titleText) {
+    if (!sourceElement) return;
+
+    const host = document.createElement('div');
+    host.style.position = 'fixed';
+    host.style.left = '-10000px';
+    host.style.top = '0';
+    host.style.zIndex = '-1';
+    host.style.padding = '24px';
+    host.style.background = '#070A14';
+    host.style.width = 'fit-content';
+
+    const wrapper = document.createElement('div');
+    wrapper.style.width = `${Math.ceil(sourceElement.getBoundingClientRect().width)}px`;
+    wrapper.style.maxWidth = 'none';
+
+    if (titleText) {
+        const title = document.createElement('div');
+        title.textContent = titleText;
+        title.style.color = '#ffffff';
+        title.style.fontWeight = '800';
+        title.style.letterSpacing = '.04em';
+        title.style.fontSize = '20px';
+        title.style.margin = '0 0 14px';
+        wrapper.appendChild(title);
+    }
+
+    const clone = sourceElement.cloneNode(true);
+    clone.style.width = '100%';
+    clone.style.maxWidth = 'none';
+    syncFormValues(sourceElement, clone);
+    wrapper.appendChild(clone);
+    host.appendChild(wrapper);
+    document.body.appendChild(host);
+
+    try {
+        await exportElementToPNG(host, filenameBase);
+    } finally {
+        host.remove();
+    }
+}
+
+async function exportSingleGroupPNG(groupId, shouldCloseModal = true) {
+    if (shouldCloseModal) closeExportModal();
+    const card = document.getElementById(`group-${groupId}`);
+    if (!card) return;
+    await exportCardLikePNG(card, `fixture-grupo-${String(groupId).toLowerCase()}`, `Fixture interactivo Mundialista 2026 · Grupo ${groupId}`);
+}
+
+async function exportAllGroupsPNG() {
     closeExportModal();
-    const groupsContainer = document.querySelector('.main-content');
-    await exportElementToPNG(groupsContainer, 'fixture-grupos');
+    for (const group of GROUPS) {
+        await exportSingleGroupPNG(group.id, false);
+        await sleep(220);
+    }
+}
+
+function renderExportGroupButtons() {
+    const grid = document.getElementById('export-group-grid');
+    if (!grid || !Array.isArray(GROUPS)) return;
+    grid.innerHTML = GROUPS.map(group => `<button class="export-group-btn" type="button" data-group-export="${group.id}">Grupo ${group.id}</button>`).join('');
+    grid.querySelectorAll('[data-group-export]').forEach(btn => {
+        btn.addEventListener('click', () => exportSingleGroupPNG(btn.dataset.groupExport));
+    });
 }
 
 async function exportBracketPNG() {
@@ -1008,7 +1079,7 @@ function initializeEventListeners() {
     // --- Export modal ---
     const exportClose = document.getElementById('export-close');
     const exportCancel = document.getElementById('export-cancel');
-    const exportGroups = document.getElementById('export-groups');
+    const exportGroupsAll = document.getElementById('export-groups-all');
     const exportBracket = document.getElementById('export-bracket');
 
     if (exportClose) exportClose.addEventListener('click', closeExportModal);
@@ -1019,7 +1090,9 @@ function initializeEventListeners() {
         if (e.target === exportModal) closeExportModal();
     });
 
-    if (exportGroups) exportGroups.addEventListener('click', exportGroupsPNG);
+    renderExportGroupButtons();
+
+    if (exportGroupsAll) exportGroupsAll.addEventListener('click', exportAllGroupsPNG);
     if (exportBracket) exportBracket.addEventListener('click', exportBracketPNG);
 
     // --- Bracket: penales (empates) ---
