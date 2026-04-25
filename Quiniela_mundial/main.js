@@ -1,5 +1,5 @@
 // =================================================================================
-// === FIXTURE INTERACTIVO MUNDIALISTA 2026 - CÓDIGO JAVASCRIPT MAESTRO      ===
+// === QUINIELA MUNDIAL 2026 - CÓDIGO JAVASCRIPT MAESTRO, FINAL Y VERIFICADO      ===
 // =================================================================================
 
 // --- CONFIGURACIÓN GLOBAL ---
@@ -8,6 +8,23 @@ const TEAMS_DATA = {};
 let isLoading = false;
 let currentUserId = null; // ¡NUEVO! Guardará el ID del usuario de la URL.
 let storageKey = 'quinielaMundial2026_data'; // Clave base, la haremos única.
+
+// Ajustes manuales guardados por usuario/dispositivo.
+// Sirven para resolver desempates especiales FIFA, fair play/ranking o combinaciones de mejores terceros.
+let manualGroupOrders = {};
+let manualThirdOrder = [];
+let manualThirdAssignments = {};
+
+const THIRD_ASSIGNMENT_SLOTS = [
+    { matchId: '16-2',  matchNo: 'M74', winnerGroup: 'E', label: '1E vs 3º A/B/C/D/F', allowed: ['A','B','C','D','F'] },
+    { matchId: '16-5',  matchNo: 'M77', winnerGroup: 'I', label: '1I vs 3º C/D/F/G/H', allowed: ['C','D','F','G','H'] },
+    { matchId: '16-7',  matchNo: 'M79', winnerGroup: 'A', label: '1A vs 3º C/E/F/H/I', allowed: ['C','E','F','H','I'] },
+    { matchId: '16-8',  matchNo: 'M80', winnerGroup: 'L', label: '1L vs 3º E/H/I/J/K', allowed: ['E','H','I','J','K'] },
+    { matchId: '16-9',  matchNo: 'M81', winnerGroup: 'D', label: '1D vs 3º B/E/F/I/J', allowed: ['B','E','F','I','J'] },
+    { matchId: '16-10', matchNo: 'M82', winnerGroup: 'G', label: '1G vs 3º A/E/H/I/J', allowed: ['A','E','H','I','J'] },
+    { matchId: '16-13', matchNo: 'M85', winnerGroup: 'B', label: '1B vs 3º E/F/G/I/J', allowed: ['E','F','G','I','J'] },
+    { matchId: '16-15', matchNo: 'M87', winnerGroup: 'K', label: '1K vs 3º D/E/I/J/L', allowed: ['D','E','I','J','L'] }
+];
 
 function getUserIdFromUrlLegacy() {
     const params = new URLSearchParams(window.location.search);
@@ -27,33 +44,17 @@ function getInviteTokenFromUrl() {
     return params.get('invite') || params.get('token'); // ?invite=... ó ?token=...
 }
 
-function normalizeShortAccessToken(raw) {
-    const text = String(raw || '').trim().normalize('NFKC').toUpperCase().replace(/[—–−]/g, '-');
-    if (!text) return null;
-
-    // Acepta token solo, con espacios, sin guiones o pegado dentro de un mensaje de WhatsApp.
-    const compactSource = text.replace(/[^A-Z0-9]/g, '');
-    const match = compactSource.match(/M26([A-HJ-NP-Z2-9]{6})([A-HJ-NP-Z2-9]{5})/);
-    if (!match) return null;
-
-    return `M26-${match[1]}-${match[2]}`;
-}
-
 function extractTokenFromAny(raw) {
-    // Permite pegar: token directo, mensaje completo de WhatsApp o link antiguo con ?invite= / ?token=.
+    // Permite pegar: token directo o un link completo
     const value = (raw || '').trim();
     if (!value) return null;
 
-    const shortToken = normalizeShortAccessToken(value);
-    if (shortToken) return shortToken;
-
-    // Si es URL, extraemos ?invite= / ?token=. El link fijo sin token no activa acceso.
+    // Si es URL, extraemos ?invite= / ?token=
     try {
         const u = new URL(value);
-        const urlToken = u.searchParams.get('invite') || u.searchParams.get('token');
-        return normalizeShortAccessToken(urlToken) || urlToken || null;
+        return u.searchParams.get('invite') || u.searchParams.get('token') || null;
     } catch (e) {
-        // Tokens largos anteriores v2 siguen funcionando.
+        // no es URL, asumimos token
         return value;
     }
 }
@@ -93,11 +94,7 @@ function showAuthGate(msg) {
     const gate = document.getElementById('auth-gate');
     const err = document.getElementById('auth-gate-error');
     if (!gate) return;
-
-    gate.hidden = false;
-    gate.style.display = 'flex';
     gate.classList.remove('is-hidden');
-
     if (err) err.textContent = msg || '';
 }
 
@@ -105,11 +102,7 @@ function hideAuthGate() {
     const gate = document.getElementById('auth-gate');
     const err = document.getElementById('auth-gate-error');
     if (!gate) return;
-
     gate.classList.add('is-hidden');
-    gate.hidden = true;
-    gate.style.display = 'none';
-
     if (err) err.textContent = '';
 }
 
@@ -187,7 +180,7 @@ async function redeemFromGate() {
     const token = extractTokenFromAny(raw);
 
     if (!token) {
-        if (err) err.textContent = 'Escribe tu token corto de acceso.';
+        if (err) err.textContent = 'Pega tu token o link de invitación.';
         return;
     }
 
@@ -197,8 +190,6 @@ async function redeemFromGate() {
         await redeemInvite(token);
         hideAuthGate();
         if (!appInitialized) initApp();
-        // Refuerzo visual: evita que el modal quede encima si el navegador mantiene estilos previos en caché.
-        setTimeout(hideAuthGate, 0);
     } catch (e) {
         if (err) err.textContent = e.message || 'No se pudo validar el token.';
     } finally {
@@ -382,243 +373,32 @@ function closeExportModal() {
     if (m) m.style.display = 'none';
 }
 
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-function syncFormValues(sourceRoot, cloneRoot) {
-    const sourceInputs = Array.from(sourceRoot.querySelectorAll('input, textarea, select'));
-    const cloneInputs = Array.from(cloneRoot.querySelectorAll('input, textarea, select'));
-    sourceInputs.forEach((src, i) => {
-        const dst = cloneInputs[i];
-        if (!dst) return;
-        if (src.type === 'checkbox' || src.type === 'radio') {
-            dst.checked = src.checked;
-            if (src.checked) dst.setAttribute('checked', 'checked');
-            else dst.removeAttribute('checked');
-            return;
-        }
-        dst.value = src.value;
-        if (src.value !== undefined) dst.setAttribute('value', src.value);
-    });
-}
-
-function buildExportFilename(filenameBase, extension = 'png') {
-    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
-    return `${filenameBase}-${stamp}.${extension}`;
-}
-
-function canvasToPNGBlob(canvas) {
-    return new Promise((resolve, reject) => {
-        canvas.toBlob(blob => {
-            if (blob) resolve(blob);
-            else reject(new Error('No se pudo generar la imagen PNG.'));
-        }, 'image/png');
-    });
-}
-
-function showManualDownloadToast(url, filename) {
-    const previous = document.getElementById('manual-download-toast');
-    if (previous) previous.remove();
-
-    const toast = document.createElement('div');
-    toast.id = 'manual-download-toast';
-    toast.className = 'manual-download-toast';
-    toast.innerHTML = `
-        <span>Descarga generada.</span>
-        <a href="${url}" download="${filename}">Si no bajó automáticamente, haz clic aquí</a>
-        <button type="button" aria-label="Cerrar aviso">×</button>
-    `;
-    toast.querySelector('button').addEventListener('click', () => toast.remove());
-    document.body.appendChild(toast);
-
-    setTimeout(() => {
-        if (document.body.contains(toast)) toast.remove();
-    }, 90000);
-}
-
-function forceDownloadBlob(blob, filename) {
-    if (!blob) return false;
-
-    // Compatibilidad extra para Edge/IE antiguo.
-    if (window.navigator && typeof window.navigator.msSaveOrOpenBlob === 'function') {
-        window.navigator.msSaveOrOpenBlob(blob, filename);
-        return true;
-    }
-
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    link.rel = 'noopener';
-    link.style.display = 'none';
-    document.body.appendChild(link);
-
-    // En Chrome/Edge es más confiable disparar un MouseEvent con el link dentro del DOM.
-    link.dispatchEvent(new MouseEvent('click', {
-        bubbles: true,
-        cancelable: true,
-        view: window
-    }));
-
-    link.remove();
-    showManualDownloadToast(url, filename);
-
-    setTimeout(() => {
-        URL.revokeObjectURL(url);
-    }, 120000);
-
-    return true;
-}
-
-async function captureElementToPNGBlob(element) {
-    if (!element) return null;
+async function exportElementToPNG(element, filenameBase) {
+    if (!element) return;
     if (typeof html2canvas !== 'function') {
-        alert('No se pudo cargar el exportador de imágenes. Revisa tu conexión y vuelve a intentar.');
-        return null;
+        alert('No se pudo cargar el exportador (html2canvas). Revisa tu conexión.');
+        return;
     }
 
-    await document.fonts?.ready?.catch(() => null);
-
-    const scale = Math.max(2, Math.min(3, window.devicePixelRatio || 1));
+    const scale = Math.min(2, window.devicePixelRatio || 1);
     const canvas = await html2canvas(element, {
         backgroundColor: '#070A14',
         scale,
         useCORS: true,
-        allowTaint: false,
-        logging: false,
-        scrollX: 0,
-        scrollY: 0,
-        windowWidth: Math.max(document.documentElement.scrollWidth, element.scrollWidth, element.offsetWidth),
-        windowHeight: Math.max(document.documentElement.scrollHeight, element.scrollHeight, element.offsetHeight)
+        logging: false
     });
 
-    return canvasToPNGBlob(canvas);
+    const link = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    link.download = `${filenameBase}-${stamp}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
 }
 
-async function exportElementToPNG(element, filenameBase, options = {}) {
-    const shouldDownload = options.download !== false;
-    const blob = await captureElementToPNGBlob(element);
-    if (!blob) return null;
-
-    const filename = buildExportFilename(filenameBase, 'png');
-    if (shouldDownload) {
-        forceDownloadBlob(blob, filename);
-    }
-    return { blob, filename };
-}
-
-async function exportCardLikePNG(sourceElement, filenameBase, titleText, options = {}) {
-    if (!sourceElement) return null;
-
-    const host = document.createElement('div');
-    host.style.position = 'fixed';
-    host.style.left = '-10000px';
-    host.style.top = '0';
-    host.style.zIndex = '-1';
-    host.style.padding = '24px';
-    host.style.background = '#070A14';
-    host.style.width = 'fit-content';
-
-    const wrapper = document.createElement('div');
-    wrapper.style.width = `${Math.ceil(sourceElement.getBoundingClientRect().width)}px`;
-    wrapper.style.maxWidth = 'none';
-
-    if (titleText) {
-        const title = document.createElement('div');
-        title.textContent = titleText;
-        title.style.color = '#ffffff';
-        title.style.fontWeight = '900';
-        title.style.letterSpacing = '.04em';
-        title.style.fontSize = '20px';
-        title.style.margin = '0 0 14px';
-        title.style.textShadow = '0 2px 8px rgba(0,0,0,.65)';
-        wrapper.appendChild(title);
-    }
-
-    const clone = sourceElement.cloneNode(true);
-    clone.style.width = '100%';
-    clone.style.maxWidth = 'none';
-    syncFormValues(sourceElement, clone);
-    wrapper.appendChild(clone);
-    host.appendChild(wrapper);
-    document.body.appendChild(host);
-
-    try {
-        return await exportElementToPNG(host, filenameBase, options);
-    } finally {
-        host.remove();
-    }
-}
-
-function getExportGroups() {
-    if (typeof groupsData !== 'undefined' && Array.isArray(groupsData)) {
-        return groupsData;
-    }
-
-    return Array.from(document.querySelectorAll('.group-card')).map(card => ({
-        id: card.dataset.groupId || String(card.id || '').replace('group-', '')
-    })).filter(group => group.id);
-}
-
-async function exportSingleGroupPNG(groupId, shouldCloseModal = true, options = {}) {
-    if (shouldCloseModal) closeExportModal();
-    const card = document.getElementById(`group-${groupId}`);
-    if (!card) return null;
-    return exportCardLikePNG(card, `fixture-grupo-${String(groupId).toLowerCase()}`, `Fixture interactivo Mundialista 2026 · Grupo ${groupId}`, options);
-}
-
-async function exportAllGroupsPNG() {
+async function exportGroupsPNG() {
     closeExportModal();
-
-    const exportBtn = document.getElementById('btn-export');
-    if (exportBtn) {
-        exportBtn.disabled = true;
-        exportBtn.textContent = 'Generando...';
-    }
-
-    try {
-        if (typeof JSZip === 'function') {
-            const zip = new JSZip();
-
-            for (const group of getExportGroups()) {
-                const result = await exportSingleGroupPNG(group.id, false, { download: false });
-                if (result && result.blob) {
-                    zip.file(result.filename, result.blob);
-                }
-                await sleep(80);
-            }
-
-            const zipBlob = await zip.generateAsync({ type: 'blob' });
-            forceDownloadBlob(zipBlob, buildExportFilename('fixture-grupos-mundial-2026', 'zip'));
-            return;
-        }
-
-        alert('Tu navegador no cargó el generador ZIP. Se intentará descargar grupo por grupo; permite descargas múltiples si Chrome lo solicita.');
-        for (const group of getExportGroups()) {
-            await exportSingleGroupPNG(group.id, false);
-            await sleep(350);
-        }
-    } catch (err) {
-        console.error(err);
-        alert('No se pudo generar la descarga. Recarga la página y vuelve a intentar.');
-    } finally {
-        if (exportBtn) {
-            exportBtn.disabled = false;
-            exportBtn.textContent = 'Exportar';
-        }
-    }
-}
-
-function renderExportGroupButtons() {
-    const grid = document.getElementById('export-group-grid');
-    if (!grid) return;
-    const exportGroups = getExportGroups();
-    if (!Array.isArray(exportGroups) || exportGroups.length === 0) return;
-    grid.innerHTML = exportGroups.map(group => `<button class="export-group-btn" type="button" data-group-export="${group.id}">Grupo ${group.id}</button>`).join('');
-    grid.querySelectorAll('[data-group-export]').forEach(btn => {
-        btn.addEventListener('click', () => exportSingleGroupPNG(btn.dataset.groupExport));
-    });
+    const groupsContainer = document.querySelector('.main-content');
+    await exportElementToPNG(groupsContainer, 'quiniela-grupos');
 }
 
 async function exportBracketPNG() {
@@ -646,7 +426,7 @@ async function exportBracketPNG() {
     document.body.appendChild(tmp);
 
     try {
-        await exportElementToPNG(clone, 'fixture-eliminatoria');
+        await exportElementToPNG(clone, 'quiniela-eliminatoria');
     } finally {
         tmp.remove();
     }
@@ -782,7 +562,7 @@ function initApp() {
     // Verificamos si el usuario ya tiene un nombre guardado
     const savedState = JSON.parse(localStorage.getItem(storageKey));
     if (savedState && savedState.userName) {
-        document.getElementById('user-name-display').textContent = `Fixture de: ${savedState.userName}`;
+        document.getElementById('user-name-display').textContent = `Quiniela de: ${savedState.userName}`;
     } else {
         // Si no hay nombre, mostramos el modal para que lo ingrese.
         document.getElementById('name-modal').style.display = 'flex';
@@ -791,186 +571,51 @@ function initApp() {
 }
 
 
-
-// --- Calendario y pronósticos personales ---
-function getGroupSchedule(groupId, pairIndex) {
-    return window.MATCH_SCHEDULE?.groups?.[groupId]?.[Number(pairIndex)] || null;
-}
-
-function getBracketSchedule(matchId) {
-    return window.MATCH_SCHEDULE?.bracket?.[matchId] || null;
-}
-
-function formatScheduleHTML(schedule) {
-    if (!schedule) return '<div class="match-schedule is-pending">Fecha y hora por confirmar</div>';
-    return [
-        '<div class="match-schedule">',
-            '<span class="match-schedule__badge">M' + schedule.no + '</span>',
-            '<span>' + schedule.date + ' · ' + schedule.time + '</span>',
-            '<small>' + schedule.venue + ' · ' + schedule.city + '</small>',
-        '</div>'
-    ].join('');
-}
-
-function getMatchKey(matchEl) {
-    return matchEl.dataset.team1 + '-' + matchEl.dataset.team2;
-}
-
-function getScorePairFromInputs(inputs) {
-    if (!inputs || inputs.length < 2) return null;
-    if (inputs[0].value === '' || inputs[1].value === '') return null;
-    const home = parseInt(inputs[0].value, 10);
-    const away = parseInt(inputs[1].value, 10);
-    if (Number.isNaN(home) || Number.isNaN(away)) return null;
-    return { home, away };
-}
-
-function getGroupMatchPrediction(matchEl) {
-    return getScorePairFromInputs(matchEl.querySelectorAll('.prediction-input'));
-}
-
-function getGroupMatchResult(matchEl) {
-    return getScorePairFromInputs(matchEl.querySelectorAll('.score-input'));
-}
-
-function getOutcome(score) {
-    if (!score) return null;
-    if (score.home > score.away) return 'home';
-    if (score.home < score.away) return 'away';
-    return 'draw';
-}
-
-function calculatePredictionPoints(prediction, result) {
-    if (!prediction || !result) return null;
-    if (prediction.home === result.home && prediction.away === result.away) {
-        return { points: 3, type: 'exact', label: 'Marcador exacto' };
-    }
-    if (getOutcome(prediction) === getOutcome(result)) {
-        return { points: 1, type: 'outcome', label: 'Acertaste ganador/empate' };
-    }
-    return { points: 0, type: 'miss', label: 'No acertaste' };
-}
-
-function renderPredictionFeedback(matchEl) {
-    if (!matchEl) return;
-    const feedback = matchEl.querySelector('.prediction-feedback');
-    if (!feedback) return;
-
-    const prediction = getGroupMatchPrediction(matchEl);
-    const result = getGroupMatchResult(matchEl);
-
-    feedback.className = 'prediction-feedback';
-    if (!prediction) {
-        feedback.textContent = 'Agrega tu pronóstico antes del partido.';
-        feedback.classList.add('is-empty');
-        return;
-    }
-    if (!result) {
-        feedback.textContent = 'Pronóstico guardado: ' + prediction.home + ' - ' + prediction.away;
-        feedback.classList.add('is-pending');
-        return;
-    }
-
-    const score = calculatePredictionPoints(prediction, result);
-    feedback.textContent = score.label + ' · ' + score.points + ' punto' + (score.points === 1 ? '' : 's');
-    feedback.classList.add('is-' + score.type);
-}
-
-function updateAllPredictionFeedback() {
-    document.querySelectorAll('.group-card .match-grid').forEach(renderPredictionFeedback);
-}
-
-function updatePredictionSummary() {
-    const summary = { total: 0, evaluated: 0, exact: 0, outcome: 0, miss: 0, points: 0 };
-
-    document.querySelectorAll('.group-card .match-grid').forEach(matchEl => {
-        const prediction = getGroupMatchPrediction(matchEl);
-        const result = getGroupMatchResult(matchEl);
-        if (prediction) summary.total += 1;
-        const score = calculatePredictionPoints(prediction, result);
-        if (score) {
-            summary.evaluated += 1;
-            summary.points += score.points;
-            if (score.type === 'exact') summary.exact += 1;
-            if (score.type === 'outcome') summary.outcome += 1;
-            if (score.type === 'miss') summary.miss += 1;
-        }
-    });
-
-    const set = (id, value) => {
-        const el = document.getElementById(id);
-        if (el) el.textContent = String(value);
-    };
-    set('pred-total', summary.total);
-    set('pred-evaluated', summary.evaluated);
-    set('pred-exact', summary.exact);
-    set('pred-points', summary.points);
-}
-
-function applyBracketSchedules() {
-    document.querySelectorAll('.bracket-container-topdown .match-container').forEach(match => {
-        const schedule = getBracketSchedule(match.dataset.matchId);
-        if (!schedule || match.querySelector('.bracket-schedule')) return;
-        const scheduleEl = document.createElement('div');
-        scheduleEl.className = 'bracket-schedule';
-        scheduleEl.innerHTML = '<span>M' + schedule.no + '</span> ' + schedule.date + ' · ' + schedule.time + '<small>' + schedule.venue + ' · ' + schedule.city + '</small>';
-        match.insertBefore(scheduleEl, match.firstChild);
-    });
-}
-
 // --- GENERACIÓN DE HTML ---
 function generateGroupsHTML() {
     const container = document.getElementById('groups-container');
-    const pairs = [[0, 1], [2, 3], [0, 2], [1, 3], [0, 3], [1, 2]];
+    container.innerHTML = groupsData.map(group => `
+        <div class="group-card" id="group-${group.id}" data-group-id="${group.id}">
+            <div class="group-header" style="background-image: linear-gradient(45deg, ${group.color1}, ${group.color2});">
+                <span>GRUPO ${group.id}</span>
+                <button class="reset-group-btn" title="Limpiar marcadores del grupo">&#x21bb;</button>
+            </div>
+            <div class="group-matches">
+                ${[[0, 1], [2, 3], [0, 2], [1, 3], [0, 3], [1, 2]].map(([i, j]) => {
+        const team1 = group.codes[i], team2 = group.codes[j];
+        return `
+                    <div class="match-grid" data-team1="${team1}" data-team2="${team2}">
+                        <span class="team-name local">
+  ${TEAMS_DATA[team1].name}
+  <span class="team-flag">${TEAMS_DATA[team1].flag}</span>
+</span>
 
-    container.innerHTML = groupsData.map(group => {
-        const matchesHtml = pairs.map(([i, j], pairIndex) => {
-            const team1 = group.codes[i];
-            const team2 = group.codes[j];
-            const schedule = getGroupSchedule(group.id, pairIndex);
-            return [
-                '<div class="match-grid" data-team1="' + team1 + '" data-team2="' + team2 + '" data-pair-index="' + pairIndex + '">',
-                    formatScheduleHTML(schedule),
-                    '<div class="match-section-label">Resultado final</div>',
-                    '<div class="match-score-row result-score-row">',
-                        '<span class="team-name local"><span>' + TEAMS_DATA[team1].name + '</span><span class="team-flag">' + TEAMS_DATA[team1].flag + '</span></span>',
-                        '<input type="number" min="0" max="20" step="1" inputmode="numeric" class="score-input" aria-label="Resultado ' + TEAMS_DATA[team1].name + '">',
-                        '<span class="match-separator">-</span>',
-                        '<input type="number" min="0" max="20" step="1" inputmode="numeric" class="score-input" aria-label="Resultado ' + TEAMS_DATA[team2].name + '">',
-                        '<span class="team-name visitor"><span class="team-flag">' + TEAMS_DATA[team2].flag + '</span><span>' + TEAMS_DATA[team2].name + '</span></span>',
-                    '</div>',
-                    '<div class="prediction-panel">',
-                        '<div class="prediction-title">Mi pronóstico</div>',
-                        '<div class="match-score-row prediction-score-row">',
-                            '<span class="team-name local compact">' + TEAMS_DATA[team1].flag + ' ' + TEAMS_DATA[team1].name + '</span>',
-                            '<input type="number" min="0" max="20" step="1" inputmode="numeric" class="prediction-input" aria-label="Pronóstico ' + TEAMS_DATA[team1].name + '">',
-                            '<span class="match-separator">-</span>',
-                            '<input type="number" min="0" max="20" step="1" inputmode="numeric" class="prediction-input" aria-label="Pronóstico ' + TEAMS_DATA[team2].name + '">',
-                            '<span class="team-name visitor compact">' + TEAMS_DATA[team2].flag + ' ' + TEAMS_DATA[team2].name + '</span>',
-                        '</div>',
-                        '<div class="prediction-feedback is-empty">Agrega tu pronóstico antes del partido.</div>',
-                    '</div>',
-                '</div>'
-            ].join('');
-        }).join('');
+<input type="number" min="0" max="20" step="1" inputmode="numeric" class="score-input">
+<span class="match-separator">-</span>
+<input type="number" min="0" max="20" step="1" inputmode="numeric" class="score-input">
 
-        const rowsHtml = group.codes.map(code => '<tr data-team-code="' + code + '"><td>' + TEAMS_DATA[code].flag + ' ' + code + '</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td></tr>').join('');
-
-        return [
-            '<div class="group-card" id="group-' + group.id + '" data-group-id="' + group.id + '">',
-                '<div class="group-header" style="background-image: linear-gradient(45deg, ' + group.color1 + ', ' + group.color2 + ');">',
-                    '<span>GRUPO ' + group.id + '</span>',
-                    '<button class="reset-group-btn" title="Limpiar marcadores y pronósticos del grupo">&#x21bb;</button>',
-                '</div>',
-                '<div class="group-matches">' + matchesHtml + '</div>',
-                '<div class="group-view-toggle-wrap"><button class="group-view-toggle" type="button" aria-pressed="false">Ver tabla</button></div>',
-                '<table class="standings-table">',
-                    '<thead><tr><th>Eq</th><th>Pts</th><th>PJ</th><th>G</th><th>E</th><th>P</th><th>GF</th><th>GC</th></tr></thead>',
-                    '<tbody>' + rowsHtml + '</tbody>',
-                '</table>',
-            '</div>'
-        ].join('');
-    }).join('');
+<span class="team-name visitor">
+  <span class="team-flag">${TEAMS_DATA[team2].flag}</span>
+  ${TEAMS_DATA[team2].name}
+</span>
+                    </div>`;
+    }).join('')}
+            </div>
+            <div class="group-view-toggle-wrap">
+                <button class="group-view-toggle" type="button" aria-pressed="false">Ver tabla</button>
+            </div>
+            <div class="manual-group-tools">
+                <button class="btn btn-sm manual-group-auto" type="button" data-group-id="${group.id}">Auto FIFA</button>
+                <span class="manual-help">Orden automático + ajuste manual</span>
+            </div>
+            <table class="standings-table">
+                <thead><tr><th>Eq</th><th>Pts</th><th>PJ</th><th>G</th><th>E</th><th>P</th><th>GF</th><th>GC</th><th>Ajuste</th></tr></thead>
+                <tbody>
+                    ${group.codes.map(code => `<tr data-team-code="${code}"><td>${TEAMS_DATA[code].flag} ${code}</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td class="manual-rank-cell"><button class="manual-rank-btn" data-direction="up" data-code="${code}" title="Subir">▲</button><button class="manual-rank-btn" data-direction="down" data-code="${code}" title="Bajar">▼</button></td></tr>`).join('')}
+                </tbody>
+            </table>
+        </div>
+    `).join('');
 }
 
 function generateBracketHTML() {
@@ -1076,8 +721,7 @@ function generateBracketHTML() {
         </div>
     `;
 
-    // Añadimos calendario y un contenedor de meta (penales) por partido.
-    applyBracketSchedules();
+    // Añadimos un contenedor de meta (penales) por partido (no interfiere con tu HTML actual)
     container.querySelectorAll('.match-container').forEach(m => {
         if (!m.querySelector('.match-meta')) {
             const meta = document.createElement('div');
@@ -1126,38 +770,50 @@ function initializeEventListeners() {
     document.getElementById('groups-container').addEventListener('input', (e) => {
         if (e.target.classList.contains('score-input')) {
             sanitizeScoreInput(e.target);
-            const match = e.target.closest('.match-grid');
-            validateMatchInputs(match);
+            validateMatchInputs(e.target.closest('.match-grid'));
             markDirty();
             updateAllCalculations();
             updateProgressUI();
-            renderPredictionFeedback(match);
-            updatePredictionSummary();
-        }
-
-        if (e.target.classList.contains('prediction-input')) {
-            sanitizeScoreInput(e.target);
-            const match = e.target.closest('.match-grid');
-            markDirty();
-            renderPredictionFeedback(match);
-            updatePredictionSummary();
-            saveStateToStorage();
         }
     });
     document.getElementById('groups-container').addEventListener('click', (e) => {
         if (e.target.classList.contains('reset-group-btn')) {
             const card = e.target.closest('.group-card');
-            card.querySelectorAll('.score-input, .prediction-input').forEach(input => {
+            card.querySelectorAll('.score-input').forEach(input => {
                 input.value = '';
                 input.classList.remove('input-invalid');
-            });
-            card.querySelectorAll('.prediction-feedback').forEach(feedback => {
-                feedback.className = 'prediction-feedback is-empty';
-                feedback.textContent = 'Agrega tu pronóstico antes del partido.';
             });
             markDirty();
             updateAllCalculations();
             updateProgressUI();
+        }
+
+        if (e.target.classList.contains('manual-rank-btn')) {
+            const card = e.target.closest('.group-card');
+            const code = e.target.dataset.code;
+            const direction = e.target.dataset.direction;
+            if (!card || !code || !direction) return;
+            const groupId = card.dataset.groupId;
+            const current = sortTeamsInGroup(getGroupStats(card), groupId);
+            const idx = current.indexOf(code);
+            const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+            if (idx >= 0 && swapIdx >= 0 && swapIdx < current.length) {
+                [current[idx], current[swapIdx]] = [current[swapIdx], current[idx]];
+                manualGroupOrders[groupId] = current;
+                markDirty();
+                updateAllCalculations();
+                updateProgressUI();
+            }
+        }
+
+        if (e.target.classList.contains('manual-group-auto')) {
+            const groupId = e.target.dataset.groupId;
+            if (groupId && manualGroupOrders[groupId]) {
+                delete manualGroupOrders[groupId];
+                markDirty();
+                updateAllCalculations();
+                updateProgressUI();
+            }
         }
 
         // Toggle móvil: ver tabla / ver partidos
@@ -1168,6 +824,51 @@ function initializeEventListeners() {
             card.classList.toggle('show-standings', willShowStandings);
             e.target.setAttribute('aria-pressed', willShowStandings ? 'true' : 'false');
             e.target.textContent = willShowStandings ? 'Ver partidos' : 'Ver tabla';
+        }
+    });
+
+    document.addEventListener('click', (e) => {
+        if (e.target.classList.contains('manual-third-rank-btn')) {
+            const code = e.target.dataset.code;
+            const direction = e.target.dataset.direction;
+            const qualified = getQualifiedTeams();
+            const current = (qualified.thirdPlaceData || []).map(team => team.code);
+            const idx = current.indexOf(code);
+            const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+            if (idx >= 0 && swapIdx >= 0 && swapIdx < current.length) {
+                [current[idx], current[swapIdx]] = [current[swapIdx], current[idx]];
+                manualThirdOrder = current;
+                markDirty();
+                updateAllCalculations();
+                updateProgressUI();
+            }
+        }
+
+        if (e.target.id === 'third-auto-reset') {
+            manualThirdOrder = [];
+            markDirty();
+            updateAllCalculations();
+            updateProgressUI();
+        }
+
+        if (e.target.id === 'third-assignment-reset') {
+            manualThirdAssignments = {};
+            markDirty();
+            updateAllCalculations();
+            updateProgressUI();
+        }
+    });
+
+    document.addEventListener('change', (e) => {
+        if (e.target.classList.contains('third-assignment-select')) {
+            const matchId = e.target.dataset.matchId;
+            const value = e.target.value;
+            if (!matchId) return;
+            if (value) manualThirdAssignments[matchId] = value;
+            else delete manualThirdAssignments[matchId];
+            markDirty();
+            updateAllCalculations();
+            updateProgressUI();
         }
     });
 
@@ -1188,7 +889,7 @@ function initializeEventListeners() {
         const userName = userNameInput.value.trim();
 
         if (userName) {
-            document.getElementById('user-name-display').textContent = `Fixture de: ${userName}`;
+            document.getElementById('user-name-display').textContent = `Quiniela de: ${userName}`;
 
             // Guardamos el nombre junto con el resto de los datos
             const currentState = JSON.parse(localStorage.getItem(storageKey)) || {};
@@ -1209,7 +910,7 @@ function initializeEventListeners() {
 
     const btnReset = document.getElementById('btn-reset-all');
     if (btnReset) btnReset.addEventListener('click', () => {
-        const typed = prompt('Esto borrará tu fixture en este dispositivo. Escribe BORRAR para confirmar:');
+        const typed = prompt('Esto borrará tu quiniela en este dispositivo. Escribe BORRAR para confirmar:');
         if (typed === 'BORRAR') {
             localStorage.removeItem(storageKey);
             location.reload();
@@ -1219,7 +920,7 @@ function initializeEventListeners() {
     // --- Export modal ---
     const exportClose = document.getElementById('export-close');
     const exportCancel = document.getElementById('export-cancel');
-    const exportGroupsAll = document.getElementById('export-groups-all');
+    const exportGroups = document.getElementById('export-groups');
     const exportBracket = document.getElementById('export-bracket');
 
     if (exportClose) exportClose.addEventListener('click', closeExportModal);
@@ -1230,9 +931,7 @@ function initializeEventListeners() {
         if (e.target === exportModal) closeExportModal();
     });
 
-    renderExportGroupButtons();
-
-    if (exportGroupsAll) exportGroupsAll.addEventListener('click', exportAllGroupsPNG);
+    if (exportGroups) exportGroups.addEventListener('click', exportGroupsPNG);
     if (exportBracket) exportBracket.addEventListener('click', exportBracketPNG);
 
     // --- Bracket: penales (empates) ---
@@ -1451,6 +1150,7 @@ function updateAllCalculations() {
 
     // Actualizar tabla de terceros SIEMPRE (muestra provisional si faltan grupos)
     updateThirdPlaceTable(qualified);
+    renderThirdAssignmentControls(qualified);
 
     // Poblar bracket con lo que ya se pueda (y placeholders donde falte)
     populateBracketFIFA(qualified);
@@ -1458,21 +1158,19 @@ function updateAllCalculations() {
     // Estadísticas globales
     updateGlobalStats();
 
-    updateAllPredictionFeedback();
-    updatePredictionSummary();
     updateProgressUI();
     saveStateToStorage();
 }
 
 function updateGroupStandings(groupCard) {
     const stats = getGroupStats(groupCard);
-    const sortedCodes = sortTeamsInGroup(stats);
+    const sortedCodes = sortTeamsInGroup(stats, groupCard.dataset.groupId);
     const tableBody = groupCard.querySelector('tbody');
     let isFinished = true;
     sortedCodes.forEach((code, index) => {
         const row = tableBody.querySelector(`tr[data-team-code="${code}"]`);
         const s = stats[code];
-        row.innerHTML = `<td>${TEAMS_DATA[code].flag} ${code}</td><td>${s.Pts}</td><td>${s.PJ}</td><td>${s.G}</td><td>${s.E}</td><td>${s.P}</td><td>${s.GF}</td><td>${s.GC}</td>`;
+        row.innerHTML = `<td>${TEAMS_DATA[code].flag} ${code}</td><td>${s.Pts}</td><td>${s.PJ}</td><td>${s.G}</td><td>${s.E}</td><td>${s.P}</td><td>${s.GF}</td><td>${s.GC}</td><td class="manual-rank-cell"><button class="manual-rank-btn" data-direction="up" data-code="${code}" title="Subir">▲</button><button class="manual-rank-btn" data-direction="down" data-code="${code}" title="Bajar">▼</button></td>`;
         row.className = '';
         if (index < 2) row.classList.add(index === 0 ? 'pos-first' : 'pos-second');
         if (s.PJ < 3) isFinished = false;
@@ -1503,6 +1201,7 @@ function updateThirdPlaceTable(qualified) {
             <td>${team.GF}</td>
             <td>${team.GC}</td>
             <td>${diff > 0 ? '+' : ''}${diff}</td>
+            <td class="manual-rank-cell"><button class="manual-third-rank-btn" data-direction="up" data-code="${team.code}" title="Subir">▲</button><button class="manual-third-rank-btn" data-direction="down" data-code="${team.code}" title="Bajar">▼</button></td>
         `;
         tableBody.appendChild(row);
     });
@@ -1569,14 +1268,124 @@ function getGroupStats(groupCard) {
     return stats;
 }
 
-function sortTeamsInGroup(stats) {
-    return Object.keys(stats).sort((a, b) => {
-        if (stats[b].Pts !== stats[a].Pts) return stats[b].Pts - stats[a].Pts;
-        const diffB = stats[b].GF - stats[b].GC, diffA = stats[a].GF - stats[a].GC;
-        if (diffB !== diffA) return diffB - diffA;
-        if (stats[b].GF !== stats[a].GF) return stats[b].GF - stats[a].GF;
-        return 0;
+function getHeadToHeadStats(groupId, tiedCodes) {
+    const mini = {};
+    tiedCodes.forEach(code => {
+        mini[code] = { Pts: 0, GF: 0, GC: 0 };
     });
+
+    const groupCard = document.getElementById(`group-${groupId}`);
+    if (!groupCard) return mini;
+
+    groupCard.querySelectorAll('.match-grid').forEach(match => {
+        const team1 = match.dataset.team1;
+        const team2 = match.dataset.team2;
+        if (!tiedCodes.includes(team1) || !tiedCodes.includes(team2)) return;
+
+        const [score1Str, score2Str] = Array.from(match.querySelectorAll('.score-input')).map(i => i.value);
+        if (score1Str === '' || score2Str === '') return;
+
+        const score1 = parseInt(score1Str, 10);
+        const score2 = parseInt(score2Str, 10);
+        if (Number.isNaN(score1) || Number.isNaN(score2)) return;
+
+        mini[team1].GF += score1;
+        mini[team1].GC += score2;
+        mini[team2].GF += score2;
+        mini[team2].GC += score1;
+
+        if (score1 > score2) mini[team1].Pts += 3;
+        else if (score2 > score1) mini[team2].Pts += 3;
+        else {
+            mini[team1].Pts += 1;
+            mini[team2].Pts += 1;
+        }
+    });
+
+    return mini;
+}
+
+function compareGeneralStats(stats, a, b) {
+    const diffB = stats[b].GF - stats[b].GC;
+    const diffA = stats[a].GF - stats[a].GC;
+    if (diffB !== diffA) return diffB - diffA;
+    if (stats[b].GF !== stats[a].GF) return stats[b].GF - stats[a].GF;
+    return a.localeCompare(b);
+}
+
+function sortTeamsAutomatic(stats, groupId) {
+    const byPoints = Object.keys(stats).sort((a, b) => {
+        if (stats[b].Pts !== stats[a].Pts) return stats[b].Pts - stats[a].Pts;
+        return compareGeneralStats(stats, a, b);
+    });
+
+    const finalOrder = [];
+    for (let i = 0; i < byPoints.length;) {
+        const samePoints = [byPoints[i]];
+        let j = i + 1;
+        while (j < byPoints.length && stats[byPoints[j]].Pts === stats[byPoints[i]].Pts) {
+            samePoints.push(byPoints[j]);
+            j++;
+        }
+
+        if (samePoints.length === 1 || !groupId) {
+            finalOrder.push(...samePoints);
+        } else {
+            const h2h = getHeadToHeadStats(groupId, samePoints);
+            samePoints.sort((a, b) => {
+                if (h2h[b].Pts !== h2h[a].Pts) return h2h[b].Pts - h2h[a].Pts;
+                const h2hDiffB = h2h[b].GF - h2h[b].GC;
+                const h2hDiffA = h2h[a].GF - h2h[a].GC;
+                if (h2hDiffB !== h2hDiffA) return h2hDiffB - h2hDiffA;
+                if (h2h[b].GF !== h2h[a].GF) return h2h[b].GF - h2h[a].GF;
+                return compareGeneralStats(stats, a, b);
+            });
+            finalOrder.push(...samePoints);
+        }
+        i = j;
+    }
+
+    return finalOrder;
+}
+
+function applyManualGroupOrder(autoOrder, groupId) {
+    const manual = manualGroupOrders[groupId];
+    if (!Array.isArray(manual) || !manual.length) return autoOrder;
+
+    const autoIndex = new Map(autoOrder.map((code, idx) => [code, idx]));
+    const manualIndex = new Map(manual.map((code, idx) => [code, idx]));
+
+    return autoOrder.slice().sort((a, b) => {
+        const ia = manualIndex.has(a) ? manualIndex.get(a) : 100 + (autoIndex.get(a) ?? 0);
+        const ib = manualIndex.has(b) ? manualIndex.get(b) : 100 + (autoIndex.get(b) ?? 0);
+        return ia - ib;
+    });
+}
+
+function sortTeamsInGroup(stats, groupId) {
+    return applyManualGroupOrder(sortTeamsAutomatic(stats, groupId), groupId);
+}
+
+
+function compareThirdPlaceTeams(a, b) {
+    if (b.Pts !== a.Pts) return b.Pts - a.Pts;
+    const diffB = b.GF - b.GC;
+    const diffA = a.GF - a.GC;
+    if (diffB !== diffA) return diffB - diffA;
+    if (b.GF !== a.GF) return b.GF - a.GF;
+    return a.code.localeCompare(b.code);
+}
+
+function applyManualThirdOrder(thirdPlaceData) {
+    if (!Array.isArray(manualThirdOrder) || !manualThirdOrder.length) return thirdPlaceData;
+    const autoIndex = new Map(thirdPlaceData.map((team, idx) => [team.code, idx]));
+    const manualIndex = new Map(manualThirdOrder.map((code, idx) => [code, idx]));
+    thirdPlaceData.sort((a, b) => {
+        const ia = manualIndex.has(a.code) ? manualIndex.get(a.code) : 100 + (autoIndex.get(a.code) ?? 0);
+        const ib = manualIndex.has(b.code) ? manualIndex.get(b.code) : 100 + (autoIndex.get(b.code) ?? 0);
+        return ia - ib;
+    });
+    return thirdPlaceData;
 }
 
 function getQualifiedTeams({ finishedGroups } = {}) {
@@ -1586,9 +1395,9 @@ function getQualifiedTeams({ finishedGroups } = {}) {
     groupsData.forEach(group => {
         const groupCard = document.getElementById(`group-${group.id}`);
         const stats = getGroupStats(groupCard);
-        const sortedCodes = sortTeamsInGroup(stats);
+        const sortedCodes = sortTeamsInGroup(stats, group.id);
 
-        const groupFinished = sortedCodes.length === 4 && stats[sortedCodes[0]].PJ === 3;
+        const groupFinished = sortedCodes.length === 4 && Object.values(stats).every(s => s.PJ === 3);
         if (groupFinished) {
             qualified.first[group.id] = sortedCodes[0];
             qualified.second[group.id] = sortedCodes[1];
@@ -1598,12 +1407,8 @@ function getQualifiedTeams({ finishedGroups } = {}) {
     });
 
     // Ranking de terceros (provisional si no han terminado todos los grupos)
-    thirdPlaceData.sort((a, b) => {
-        if (b.Pts !== a.Pts) return b.Pts - a.Pts;
-        const diffB = b.GF - b.GC, diffA = a.GF - a.GC;
-        if (diffB !== diffA) return diffB - diffA;
-        return b.GF - a.GF;
-    });
+    thirdPlaceData.sort(compareThirdPlaceTeams);
+    applyManualThirdOrder(thirdPlaceData);
 
     qualified.thirds = thirdPlaceData.slice(0, 8).map(t => t.code);
     qualified.thirdGroups = thirdPlaceData.slice(0, 8).map(t => t.group);
@@ -1728,41 +1533,110 @@ const ANNEX_C_MAP = {
     'EFGHIJKL': { A: 'E', B: 'J', D: 'I', E: 'F', G: 'H', I: 'G', K: 'L', L: 'K' }
 };
 
-function resolveThirdOpponentsFromAnnexC(qualified) {
-    // Solo cuando terminó la fase de grupos completa.
-    if (!qualified.allGroupsFinished) return;
+function getAnnexCBaseAssignments(qualified) {
+    const result = {};
+    if (!qualified.allGroupsFinished) return result;
 
-    // Necesitamos que ya existan los 8 grupos que aportan tercero clasificado.
     const thirdGroups = (qualified.thirdGroups || []).slice().sort().join('');
-    if (thirdGroups.length !== 8) return;
+    if (thirdGroups.length !== 8) return result;
 
     const mapping = ANNEX_C_MAP[thirdGroups];
-    if (!mapping) {
-        // No hay mapping cargado: nos quedamos con placeholders.
-        console.warn('[Annexe C] Falta el mapping para la combinación:', thirdGroups);
+    if (!mapping) return result;
+
+    const slotByWinner = new Map(THIRD_ASSIGNMENT_SLOTS.map(slot => [slot.winnerGroup, slot]));
+    Object.entries(mapping).forEach(([winnerGroup, thirdGroup]) => {
+        const slot = slotByWinner.get(winnerGroup);
+        if (slot && qualified.thirdByGroup[thirdGroup]) {
+            result[slot.matchId] = thirdGroup;
+        }
+    });
+    return result;
+}
+
+function getSuggestedThirdAssignments(qualified) {
+    const annex = getAnnexCBaseAssignments(qualified);
+    if (Object.keys(annex).length) return annex;
+    if (!qualified.allGroupsFinished) return {};
+
+    // Sugerencia automática: toma los terceros clasificados mejor rankeados y los reparte sin repetir
+    // dentro de los rangos permitidos por cada partido. El usuario puede corregirlo con los selects.
+    const rankedGroups = (qualified.thirdPlaceData || []).slice(0, 8).map(team => team.group);
+    const used = new Set();
+    const result = {};
+
+    THIRD_ASSIGNMENT_SLOTS.forEach(slot => {
+        const candidate = rankedGroups.find(group => slot.allowed.includes(group) && !used.has(group));
+        if (candidate) {
+            result[slot.matchId] = candidate;
+            used.add(candidate);
+        }
+    });
+
+    return result;
+}
+
+function getEffectiveThirdAssignments(qualified) {
+    const base = getSuggestedThirdAssignments(qualified);
+    Object.entries(manualThirdAssignments || {}).forEach(([matchId, group]) => {
+        const slot = THIRD_ASSIGNMENT_SLOTS.find(s => s.matchId === matchId);
+        if (slot && slot.allowed.includes(group) && qualified.thirdByGroup[group]) {
+            base[matchId] = group;
+        }
+    });
+    return base;
+}
+
+function applyThirdAssignmentsToBracket(qualified) {
+    if (!qualified.allGroupsFinished) return;
+    const assignments = getEffectiveThirdAssignments(qualified);
+    THIRD_ASSIGNMENT_SLOTS.forEach(slot => {
+        const group = assignments[slot.matchId];
+        const code = group ? qualified.thirdByGroup[group] : null;
+        if (code) updateNextMatch(slot.matchId, 'away', code);
+    });
+}
+
+function renderThirdAssignmentControls(qualified) {
+    const container = document.getElementById('third-assignment-controls');
+    if (!container) return;
+
+    if (!qualified.allGroupsFinished) {
+        container.innerHTML = `<div class="third-assignment-note">Los cruces de terceros se podrán ajustar cuando terminen los 12 grupos.</div>`;
         return;
     }
 
-    // Para cada ganador de grupo que enfrenta a un tercero, reemplazamos el placeholder por el tercero real.
-    const thirdTeam = (groupLetter) => qualified.thirdByGroup[groupLetter];
-
-    // 1A vs 3?
-    if (mapping.A) updateNextMatch('16-7', 'away', thirdTeam(mapping.A));
-    // 1B vs 3?
-    if (mapping.B) updateNextMatch('16-13', 'away', thirdTeam(mapping.B));
-    // 1D vs 3?
-    if (mapping.D) updateNextMatch('16-9', 'away', thirdTeam(mapping.D));
-    // 1E vs 3?
-    if (mapping.E) updateNextMatch('16-2', 'away', thirdTeam(mapping.E));
-    // 1G vs 3?
-    if (mapping.G) updateNextMatch('16-10', 'away', thirdTeam(mapping.G));
-    // 1I vs 3?
-    if (mapping.I) updateNextMatch('16-5', 'away', thirdTeam(mapping.I));
-    // 1K vs 3?
-    if (mapping.K) updateNextMatch('16-15', 'away', thirdTeam(mapping.K));
-    // 1L vs 3?
-    if (mapping.L) updateNextMatch('16-8', 'away', thirdTeam(mapping.L));
+    const effective = getEffectiveThirdAssignments(qualified);
+    container.innerHTML = `
+        <div class="third-assignment-title">Ajuste de cruces de mejores terceros</div>
+        <div class="third-assignment-note">Si el cruce oficial no coincide, selecciona manualmente qué 3º entra en cada partido.</div>
+        <div class="third-assignment-grid">
+            ${THIRD_ASSIGNMENT_SLOTS.map(slot => {
+                const current = manualThirdAssignments[slot.matchId] || effective[slot.matchId] || '';
+                const options = slot.allowed
+                    .filter(group => qualified.thirdByGroup[group])
+                    .map(group => {
+                        const code = qualified.thirdByGroup[group];
+                        const team = TEAMS_DATA[code];
+                        return `<option value="${group}" ${group === current ? 'selected' : ''}>3${group} · ${team?.flag ?? ''} ${team?.name ?? code}</option>`;
+                    }).join('');
+                return `
+                    <label class="third-assignment-item">
+                        <span>${slot.matchNo} · ${slot.label}</span>
+                        <select class="third-assignment-select" data-match-id="${slot.matchId}">
+                            <option value="">Auto sugerido</option>
+                            ${options}
+                        </select>
+                    </label>`;
+            }).join('')}
+        </div>
+        <button class="btn btn-sm" type="button" id="third-assignment-reset">Auto cruces</button>
+    `;
 }
+
+function resolveThirdOpponentsFromAnnexC(qualified) {
+    applyThirdAssignmentsToBracket(qualified);
+}
+
 
 // --- Compat: mantenemos el nombre antiguo por si lo llamaba alguna parte ---
 function populateBracket(qualified) {
@@ -1816,26 +1690,25 @@ function saveStateToStorage() {
     const newState = {
         userName: currentState.userName, // Mantenemos el nombre de usuario existente.
         groups: {},
-        predictions: {},
         bracket: {},
-        bracketMeta: {}
+        bracketMeta: {},
+        manual: {
+            groupOrders: manualGroupOrders,
+            thirdOrder: manualThirdOrder,
+            thirdAssignments: manualThirdAssignments
+        }
     };
 
     // 1. Guardar marcadores de la fase de grupos
     document.querySelectorAll('.group-card').forEach(card => {
         const groupId = card.dataset.groupId;
         newState.groups[groupId] = {};
-        newState.predictions[groupId] = {};
         card.querySelectorAll('.match-grid').forEach(match => {
-            const matchKey = getMatchKey(match);
+            const matchKey = `${match.dataset.team1}-${match.dataset.team2}`;
             const scores = Array.from(match.querySelectorAll('.score-input')).map(i => i.value);
-            const predictions = Array.from(match.querySelectorAll('.prediction-input')).map(i => i.value);
             // Guardamos solo si hay datos para no llenar el storage de vacíos
             if (scores[0] !== '' || scores[1] !== '') {
                 newState.groups[groupId][matchKey] = scores;
-            }
-            if (predictions[0] !== '' || predictions[1] !== '') {
-                newState.predictions[groupId][matchKey] = predictions;
             }
         });
     });
@@ -1870,6 +1743,10 @@ function loadStateFromStorage() {
 
     const savedState = JSON.parse(localStorage.getItem(storageKey));
 
+    manualGroupOrders = savedState?.manual?.groupOrders || {};
+    manualThirdOrder = savedState?.manual?.thirdOrder || [];
+    manualThirdAssignments = savedState?.manual?.thirdAssignments || {};
+
     // Cargar marcadores de grupos
     if (savedState && savedState.groups) {
         document.querySelectorAll('.group-card').forEach(card => {
@@ -1882,26 +1759,6 @@ function loadStateFromStorage() {
                         const inputs = match.querySelectorAll('.score-input');
                         inputs[0].value = score1;
                         inputs[1].value = score2;
-                    }
-                });
-            }
-        });
-    }
-
-    // Cargar pronósticos personales
-    if (savedState && savedState.predictions) {
-        document.querySelectorAll('.group-card').forEach(card => {
-            const groupId = card.dataset.groupId;
-            if (savedState.predictions[groupId]) {
-                card.querySelectorAll('.match-grid').forEach(match => {
-                    const matchKey = getMatchKey(match);
-                    if (savedState.predictions[groupId][matchKey]) {
-                        const [pred1, pred2] = savedState.predictions[groupId][matchKey];
-                        const inputs = match.querySelectorAll('.prediction-input');
-                        if (inputs.length === 2) {
-                            inputs[0].value = pred1;
-                            inputs[1].value = pred2;
-                        }
                     }
                 });
             }
@@ -1959,9 +1816,6 @@ function loadStateFromStorage() {
             });
         });
     }
-
-    updateAllPredictionFeedback();
-    updatePredictionSummary();
 
     isLoading = false; // --- Desactivamos la bandera de carga al finalizar ---
 }

@@ -1,6 +1,6 @@
 // Archivo: groups-data.js
 // ============================================================================
-// === GRUPOS - FIXTURE INTERACTIVO MUNDIALISTA 2026 (12 grupos x 4 selecciones = 48 equipos) ===
+// === GRUPOS - QUINIELA MUNDIAL 2026 (12 grupos x 4 selecciones = 48 equipos) ===
 // ============================================================================
 //
 // Cada objeto de grupo DEBE contener:
@@ -10,10 +10,12 @@
 //  - flags: emoji de bandera (4)
 //  - color1 / color2: degradado del header
 //
-// Grupos actualizados con los clasificados de repechaje.
+// Nota: Algunos lugares aún son "winner" de Playoffs (UEFA / IC)
+//       porque en el sorteo quedaron asignados así.
 //
 
 const groupsData = [
+  // GROUP A
   {
     id: "A",
     teams: ["México", "Sudáfrica", "Corea del Sur", "Chequia"],
@@ -22,6 +24,8 @@ const groupsData = [
     color1: "#007bff",
     color2: "#0056b3",
   },
+
+  // GROUP B
   {
     id: "B",
     teams: ["Canadá", "Bosnia y Herzegovina", "Qatar", "Suiza"],
@@ -30,6 +34,8 @@ const groupsData = [
     color1: "#28a745",
     color2: "#1e7e34",
   },
+
+  // GROUP C
   {
     id: "C",
     teams: ["Brasil", "Marruecos", "Haití", "Escocia"],
@@ -38,6 +44,8 @@ const groupsData = [
     color1: "#fd7e14",
     color2: "#c35c0f",
   },
+
+  // GROUP D
   {
     id: "D",
     teams: ["Estados Unidos", "Paraguay", "Australia", "Türkiye"],
@@ -46,6 +54,8 @@ const groupsData = [
     color1: "#6f42c1",
     color2: "#4e2a8b",
   },
+
+  // GROUP E
   {
     id: "E",
     teams: ["Alemania", "Curaçao", "Costa de Marfil", "Ecuador"],
@@ -54,6 +64,8 @@ const groupsData = [
     color1: "#dc3545",
     color2: "#a71d2a",
   },
+
+  // GROUP F
   {
     id: "F",
     teams: ["Países Bajos", "Japón", "Suecia", "Túnez"],
@@ -62,6 +74,8 @@ const groupsData = [
     color1: "#20c997",
     color2: "#128765",
   },
+
+  // GROUP G
   {
     id: "G",
     teams: ["Bélgica", "Egipto", "Irán", "Nueva Zelanda"],
@@ -70,6 +84,8 @@ const groupsData = [
     color1: "#6c757d",
     color2: "#343a40",
   },
+
+  // GROUP H
   {
     id: "H",
     teams: ["España", "Cabo Verde", "Arabia Saudita", "Uruguay"],
@@ -78,6 +94,8 @@ const groupsData = [
     color1: "#ffc107",
     color2: "#d39e00",
   },
+
+  // GROUP I
   {
     id: "I",
     teams: ["Francia", "Senegal", "Iraq", "Noruega"],
@@ -86,6 +104,8 @@ const groupsData = [
     color1: "#e83e8c",
     color2: "#a61e5c",
   },
+
+  // GROUP J
   {
     id: "J",
     teams: ["Argentina", "Argelia", "Austria", "Jordania"],
@@ -94,6 +114,8 @@ const groupsData = [
     color1: "#8b4513",
     color2: "#5c2d0d",
   },
+
+  // GROUP K
   {
     id: "K",
     teams: ["Portugal", "Congo DR", "Uzbekistán", "Colombia"],
@@ -102,6 +124,8 @@ const groupsData = [
     color1: "#0d6efd",
     color2: "#0a53be",
   },
+
+  // GROUP L
   {
     id: "L",
     teams: ["Inglaterra", "Croacia", "Ghana", "Panamá"],
