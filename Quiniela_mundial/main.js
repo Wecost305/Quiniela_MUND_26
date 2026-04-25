@@ -14,6 +14,7 @@ let storageKey = 'quinielaMundial2026_data'; // Clave base, la haremos única.
 let manualGroupOrders = {};
 let manualThirdOrder = [];
 let manualThirdAssignments = {};
+let confirmedThirdSignature = null;
 
 // Pronósticos personales del usuario.
 // No afectan el cálculo FIFA ni la fase eliminatoria; solo sirven como referencia personal.
@@ -214,67 +215,6 @@ function renderTeamName(code, side) {
     </span>`;
 }
 
-
-const BRACKET_PENDING_LABELS = {
-    '16-1':  { home: '2º Grupo A', away: '2º Grupo B' },
-    '16-2':  { home: '1º Grupo E', away: '3º A/B/C/D/F' },
-    '16-3':  { home: '1º Grupo F', away: '2º Grupo C' },
-    '16-4':  { home: '1º Grupo C', away: '2º Grupo F' },
-    '16-5':  { home: '1º Grupo I', away: '3º C/D/F/G/H' },
-    '16-6':  { home: '2º Grupo E', away: '2º Grupo I' },
-    '16-7':  { home: '1º Grupo A', away: '3º C/E/F/H/I' },
-    '16-8':  { home: '1º Grupo L', away: '3º E/H/I/J/K' },
-    '16-9':  { home: '1º Grupo D', away: '3º B/E/F/I/J' },
-    '16-10': { home: '1º Grupo G', away: '3º A/E/H/I/J' },
-    '16-11': { home: '2º Grupo K', away: '2º Grupo L' },
-    '16-12': { home: '1º Grupo H', away: '2º Grupo J' },
-    '16-13': { home: '1º Grupo B', away: '3º E/F/G/I/J' },
-    '16-14': { home: '1º Grupo J', away: '2º Grupo H' },
-    '16-15': { home: '1º Grupo K', away: '3º D/E/I/J/L' },
-    '16-16': { home: '2º Grupo D', away: '2º Grupo G' },
-    '8-1':   { home: 'Ganador M74', away: 'Ganador M77' },
-    '8-2':   { home: 'Ganador M73', away: 'Ganador M75' },
-    '8-3':   { home: 'Ganador M76', away: 'Ganador M78' },
-    '8-4':   { home: 'Ganador M79', away: 'Ganador M80' },
-    '8-5':   { home: 'Ganador M83', away: 'Ganador M84' },
-    '8-6':   { home: 'Ganador M81', away: 'Ganador M82' },
-    '8-7':   { home: 'Ganador M86', away: 'Ganador M88' },
-    '8-8':   { home: 'Ganador M85', away: 'Ganador M87' },
-    '4-1':   { home: 'Ganador M89', away: 'Ganador M90' },
-    '4-2':   { home: 'Ganador M91', away: 'Ganador M92' },
-    '4-3':   { home: 'Ganador M93', away: 'Ganador M94' },
-    '4-4':   { home: 'Ganador M95', away: 'Ganador M96' },
-    '2-1':   { home: 'Ganador M97', away: 'Ganador M98' },
-    '2-2':   { home: 'Ganador M99', away: 'Ganador M100' },
-    '1-1':   { home: 'Ganador M101', away: 'Ganador M102' },
-    '3-1':   { home: 'Perdedor M101', away: 'Perdedor M102' }
-};
-
-function getPendingBracketLabel(matchId, position, fallback = 'Pendiente') {
-    return BRACKET_PENDING_LABELS[matchId]?.[position] || fallback;
-}
-
-function setPendingBracketTeam(matchId, position, label) {
-    const matchEl = document.querySelector(`[data-match-id="${matchId}"]`);
-    if (!matchEl) return;
-    const pill = matchEl.querySelector(`.team-pill[data-team-pos="${position}"]`);
-    if (!pill) return;
-
-    const safeLabel = escapeHTML(label || getPendingBracketLabel(matchId, position));
-    pill.classList.add('placeholder', 'pending');
-    pill.classList.remove('loser');
-    delete pill.dataset.teamCode;
-    pill.title = label || getPendingBracketLabel(matchId, position);
-    pill.innerHTML = `<span class="flag">⏳</span><span class="code">${safeLabel}</span>`;
-}
-
-function seedBracketPendingLabels() {
-    Object.entries(BRACKET_PENDING_LABELS).forEach(([matchId, positions]) => {
-        if (positions.home) setPendingBracketTeam(matchId, 'home', positions.home);
-        if (positions.away) setPendingBracketTeam(matchId, 'away', positions.away);
-    });
-}
-
 const THIRD_ASSIGNMENT_SLOTS = [
     { matchId: '16-2',  matchNo: 'M74', winnerGroup: 'E', label: '1E vs 3º A/B/C/D/F', allowed: ['A','B','C','D','F'] },
     { matchId: '16-5',  matchNo: 'M77', winnerGroup: 'I', label: '1I vs 3º C/D/F/G/H', allowed: ['C','D','F','G','H'] },
@@ -285,6 +225,51 @@ const THIRD_ASSIGNMENT_SLOTS = [
     { matchId: '16-13', matchNo: 'M85', winnerGroup: 'B', label: '1B vs 3º E/F/G/I/J', allowed: ['E','F','G','I','J'] },
     { matchId: '16-15', matchNo: 'M87', winnerGroup: 'K', label: '1K vs 3º D/E/I/J/L', allowed: ['D','E','I','J','L'] }
 ];
+
+function getThirdConfirmationSignature(qualified) {
+    if (!qualified?.allGroupsFinished || !Array.isArray(qualified.thirdPlaceData)) return null;
+    const topEight = qualified.thirdPlaceData.slice(0, 8);
+    if (topEight.length !== 8) return null;
+    return topEight.map(team => `${team.group}:${team.code}`).join('|');
+}
+
+function areThirdsConfirmed(qualified) {
+    const signature = getThirdConfirmationSignature(qualified);
+    return Boolean(signature && confirmedThirdSignature === signature);
+}
+
+function getConfirmedThirdTeams(qualified) {
+    if (!areThirdsConfirmed(qualified)) return [];
+    return (qualified.thirdPlaceData || []).slice(0, 8);
+}
+
+function resetThirdConfirmation() {
+    confirmedThirdSignature = null;
+    manualThirdAssignments = {};
+}
+
+function setBracketPlaceholder(matchId, position, label, icon = '⏳') {
+    const matchEl = document.querySelector(`[data-match-id="${matchId}"]`);
+    if (!matchEl) return;
+
+    const pill = matchEl.querySelector(`.team-pill[data-team-pos="${position}"]`);
+    if (!pill) return;
+
+    pill.classList.add('placeholder');
+    pill.classList.remove('loser');
+    delete pill.dataset.teamCode;
+    pill.innerHTML = `<span class="flag">${escapeHTML(icon)}</span><span class="code placeholder-label" title="${escapeHTML(label)}">${escapeHTML(label)}</span>`;
+}
+
+function setBracketSlot(matchId, position, teamCode, placeholderLabel) {
+    if (teamCode) updateNextMatch(matchId, position, teamCode);
+    else setBracketPlaceholder(matchId, position, placeholderLabel);
+}
+
+function getTopThirdGroupSet(qualified) {
+    return new Set((qualified.thirdPlaceData || []).slice(0, 8).map(team => team.group));
+}
+
 
 function getUserIdFromUrlLegacy() {
     const params = new URLSearchParams(window.location.search);
@@ -1167,6 +1152,7 @@ function initializeEventListeners() {
             const matchEl = e.target.closest('.match-grid');
             validateMatchInputs(matchEl);
             updatePredictionStatusForMatch(matchEl);
+            resetThirdConfirmation();
             markDirty();
             updateAllCalculations();
             updateProgressUI();
@@ -1179,6 +1165,7 @@ function initializeEventListeners() {
                 input.value = '';
                 input.classList.remove('input-invalid');
             });
+            resetThirdConfirmation();
             markDirty();
             updateAllCalculations();
             updateProgressUI();
@@ -1196,6 +1183,7 @@ function initializeEventListeners() {
             if (idx >= 0 && swapIdx >= 0 && swapIdx < current.length) {
                 [current[idx], current[swapIdx]] = [current[swapIdx], current[idx]];
                 manualGroupOrders[groupId] = current;
+                resetThirdConfirmation();
                 markDirty();
                 updateAllCalculations();
                 updateProgressUI();
@@ -1206,6 +1194,7 @@ function initializeEventListeners() {
             const groupId = e.target.dataset.groupId;
             if (groupId && manualGroupOrders[groupId]) {
                 delete manualGroupOrders[groupId];
+                resetThirdConfirmation();
                 markDirty();
                 updateAllCalculations();
                 updateProgressUI();
@@ -1234,6 +1223,7 @@ function initializeEventListeners() {
             if (idx >= 0 && swapIdx >= 0 && swapIdx < current.length) {
                 [current[idx], current[swapIdx]] = [current[swapIdx], current[idx]];
                 manualThirdOrder = current;
+                resetThirdConfirmation();
                 markDirty();
                 updateAllCalculations();
                 updateProgressUI();
@@ -1242,6 +1232,26 @@ function initializeEventListeners() {
 
         if (e.target.id === 'third-auto-reset') {
             manualThirdOrder = [];
+            resetThirdConfirmation();
+            markDirty();
+            updateAllCalculations();
+            updateProgressUI();
+        }
+
+        if (e.target.id === 'third-confirm-btn') {
+            const qualified = getQualifiedTeams();
+            const signature = getThirdConfirmationSignature(qualified);
+            if (signature) {
+                confirmedThirdSignature = signature;
+                manualThirdAssignments = {};
+                markDirty();
+                updateAllCalculations();
+                updateProgressUI();
+            }
+        }
+
+        if (e.target.id === 'third-confirm-reset') {
+            resetThirdConfirmation();
             markDirty();
             updateAllCalculations();
             updateProgressUI();
@@ -1260,8 +1270,16 @@ function initializeEventListeners() {
             const matchId = e.target.dataset.matchId;
             const value = e.target.value;
             if (!matchId) return;
-            if (value) manualThirdAssignments[matchId] = value;
-            else delete manualThirdAssignments[matchId];
+            if (value) {
+                Object.keys(manualThirdAssignments).forEach(existingMatchId => {
+                    if (existingMatchId !== matchId && manualThirdAssignments[existingMatchId] === value) {
+                        delete manualThirdAssignments[existingMatchId];
+                    }
+                });
+                manualThirdAssignments[matchId] = value;
+            } else {
+                delete manualThirdAssignments[matchId];
+            }
             markDirty();
             updateAllCalculations();
             updateProgressUI();
@@ -1613,7 +1631,7 @@ function updateNextMatch(nextMatchId, position, teamCode) {
 
     // --- Lógica para el CAMPEÓN (se muestra completo) ---
     if (nextMatchId === 'champion') {
-        nextMatchEl.classList.remove('placeholder', 'pending');
+        nextMatchEl.classList.remove('placeholder');
         // Mostramos bandera y nombre completo
         nextMatchEl.innerHTML = `<span class="flag">${TEAMS_DATA[teamCode].flag}</span><span class="code">${TEAMS_DATA[teamCode].name}</span>`;
         return;
@@ -1621,8 +1639,7 @@ function updateNextMatch(nextMatchId, position, teamCode) {
 
     const targetPill = nextMatchEl.querySelector(`.team-pill[data-team-pos="${position}"]`);
     if (targetPill) {
-        targetPill.classList.remove('placeholder', 'pending');
-        targetPill.removeAttribute('title');
+        targetPill.classList.remove('placeholder');
         targetPill.dataset.teamCode = teamCode;
         // ¡CAMBIO CLAVE! Mostramos solo la bandera y el nombre completo. El score se añadirá después.
         targetPill.innerHTML = `<span class="flag">${TEAMS_DATA[teamCode].flag}</span><span class="code">${TEAMS_DATA[teamCode].name}</span>`;
@@ -1821,101 +1838,53 @@ function getQualifiedTeams({ finishedGroups } = {}) {
 function populateBracketFIFA(qualified) {
     // Siempre limpiamos todo el bracket (para que recalcular no deje basura)
     clearBracket();
-    // Mostramos etiquetas pendientes para que el usuario entienda qué lugar llenará cada espacio.
-    seedBracketPendingLabels();
 
     // --------------------------------------------------
-    // 1) Sembrado oficial Round of 32 (Art. 12.6)
+    // 1) Sembrado oficial Round of 32
+    //    Los 1º y 2º de grupo entran automáticamente.
+    //    Los terceros quedan como espacios pendientes hasta confirmarlos y seleccionarlos.
     // --------------------------------------------------
 
-    // Helper: si ya existe el clasificado, lo pinta; si no, deja la etiqueta pendiente.
-    const setTeam = (matchId, pos, code) => {
-        if (!code) {
-            setPendingBracketTeam(matchId, pos, getPendingBracketLabel(matchId, pos));
-            return;
-        }
-        updateNextMatch(matchId, pos, code);
-    };
+    // M73: 2A vs 2B
+    setBracketSlot('16-1', 'home', qualified.second['A'], '2º Grupo A');
+    setBracketSlot('16-1', 'away', qualified.second['B'], '2º Grupo B');
 
-    // Helper: placeholder de terceros hasta que terminen los 12 grupos y se resuelva el cruce.
-    const setThirdPlaceholder = (matchId, pos, label) => {
-        setPendingBracketTeam(matchId, pos, `3º ${label}`);
-    };
+    // M75: 1F vs 2C
+    setBracketSlot('16-3', 'home', qualified.first['F'], '1º Grupo F');
+    setBracketSlot('16-3', 'away', qualified.second['C'], '2º Grupo C');
 
-    // --- Matches fijos (runner-up / winner)
-    // (16-1)  M73: 2A vs 2B
-    setTeam('16-1', 'home', qualified.second['A']);
-    setTeam('16-1', 'away', qualified.second['B']);
+    // M76: 1C vs 2F
+    setBracketSlot('16-4', 'home', qualified.first['C'], '1º Grupo C');
+    setBracketSlot('16-4', 'away', qualified.second['F'], '2º Grupo F');
 
-    // (16-3)  M75: 1F vs 2C
-    setTeam('16-3', 'home', qualified.first['F']);
-    setTeam('16-3', 'away', qualified.second['C']);
+    // M78: 2E vs 2I
+    setBracketSlot('16-6', 'home', qualified.second['E'], '2º Grupo E');
+    setBracketSlot('16-6', 'away', qualified.second['I'], '2º Grupo I');
 
-    // (16-4)  M76: 1C vs 2F
-    setTeam('16-4', 'home', qualified.first['C']);
-    setTeam('16-4', 'away', qualified.second['F']);
+    // M83: 2K vs 2L
+    setBracketSlot('16-11', 'home', qualified.second['K'], '2º Grupo K');
+    setBracketSlot('16-11', 'away', qualified.second['L'], '2º Grupo L');
 
-    // (16-6)  M78: 2E vs 2I
-    setTeam('16-6', 'home', qualified.second['E']);
-    setTeam('16-6', 'away', qualified.second['I']);
+    // M84: 1H vs 2J
+    setBracketSlot('16-12', 'home', qualified.first['H'], '1º Grupo H');
+    setBracketSlot('16-12', 'away', qualified.second['J'], '2º Grupo J');
 
-    // (16-11) M83: 2K vs 2L
-    setTeam('16-11', 'home', qualified.second['K']);
-    setTeam('16-11', 'away', qualified.second['L']);
+    // M86: 1J vs 2H
+    setBracketSlot('16-14', 'home', qualified.first['J'], '1º Grupo J');
+    setBracketSlot('16-14', 'away', qualified.second['H'], '2º Grupo H');
 
-    // (16-12) M84: 1H vs 2J
-    setTeam('16-12', 'home', qualified.first['H']);
-    setTeam('16-12', 'away', qualified.second['J']);
+    // M88: 2D vs 2G
+    setBracketSlot('16-16', 'home', qualified.second['D'], '2º Grupo D');
+    setBracketSlot('16-16', 'away', qualified.second['G'], '2º Grupo G');
 
-    // (16-14) M86: 1J vs 2H
-    setTeam('16-14', 'home', qualified.first['J']);
-    setTeam('16-14', 'away', qualified.second['H']);
+    // Partidos con terceros: lado fijo automático + tercer lugar pendiente/manual.
+    THIRD_ASSIGNMENT_SLOTS.forEach(slot => {
+        setBracketSlot(slot.matchId, 'home', qualified.first[slot.winnerGroup], `1º Grupo ${slot.winnerGroup}`);
+        setBracketPlaceholder(slot.matchId, 'away', `3º ${slot.allowed.join('/')}`);
+    });
 
-    // (16-16) M88: 2D vs 2G
-    setTeam('16-16', 'home', qualified.second['D']);
-    setTeam('16-16', 'away', qualified.second['G']);
-
-    // --- Matches que dependen de los 8 mejores terceros (Art. 12.6 + Annexe C)
-    // Si todavía no se puede resolver (porque faltan grupos o no está la tabla de Annexe C), mostramos placeholder.
-
-    // (16-2)  M74: 1E vs (mejor 3º de ABCDF)
-    setTeam('16-2', 'home', qualified.first['E']);
-    setThirdPlaceholder('16-2', 'away', 'ABCDF');
-
-    // (16-5)  M77: 1I vs (mejor 3º de CDFGH)
-    setTeam('16-5', 'home', qualified.first['I']);
-    setThirdPlaceholder('16-5', 'away', 'CDFGH');
-
-    // (16-7)  M79: 1A vs (mejor 3º de CEFHI)
-    setTeam('16-7', 'home', qualified.first['A']);
-    setThirdPlaceholder('16-7', 'away', 'CEFHI');
-
-    // (16-8)  M80: 1L vs (mejor 3º de EHIJK)
-    setTeam('16-8', 'home', qualified.first['L']);
-    setThirdPlaceholder('16-8', 'away', 'EHIJK');
-
-    // (16-9)  M81: 1D vs (mejor 3º de BEFIJ)
-    setTeam('16-9', 'home', qualified.first['D']);
-    setThirdPlaceholder('16-9', 'away', 'BEFIJ');
-
-    // (16-10) M82: 1G vs (mejor 3º de AEHIJ)
-    setTeam('16-10', 'home', qualified.first['G']);
-    setThirdPlaceholder('16-10', 'away', 'AEHIJ');
-
-    // (16-13) M85: 1B vs (mejor 3º de EFGIJ)
-    setTeam('16-13', 'home', qualified.first['B']);
-    setThirdPlaceholder('16-13', 'away', 'EFGIJ');
-
-    // (16-15) M87: 1K vs (mejor 3º de DEIJL)
-    setTeam('16-15', 'home', qualified.first['K']);
-    setThirdPlaceholder('16-15', 'away', 'DEIJL');
-
-    // --------------------------------------------------
-    // 2) Intentar resolver placeholders usando Annexe C
-    // --------------------------------------------------
-    // Si tienes el mapeo completo (495 combinaciones), aquí es donde se asignan los terceros reales.
-    // Ver función resolveThirdOpponentsFromAnnexC().
-    resolveThirdOpponentsFromAnnexC(qualified);
+    // Si el usuario ya confirmó terceros y asignó cruces, se colocan aquí.
+    applyThirdAssignmentsToBracket(qualified);
 }
 
 // --- Tabla Annexe C (FIFA) ---
@@ -1931,133 +1900,57 @@ const ANNEX_C_MAP = {
     'EFGHIJKL': { A: 'E', B: 'J', D: 'I', E: 'F', G: 'H', I: 'G', K: 'L', L: 'K' }
 };
 
-function getQualifiedThirdGroups(qualified) {
-    return (qualified.thirdPlaceData || [])
-        .slice(0, 8)
-        .map(team => team.group)
-        .filter(Boolean);
-}
-
-function getQualifiedThirdGroupSet(qualified) {
-    return new Set(getQualifiedThirdGroups(qualified));
-}
-
-function getThirdCandidatesForSlot(slot, qualified) {
-    const qualifiedGroups = getQualifiedThirdGroupSet(qualified);
-    return slot.allowed.filter(group => qualifiedGroups.has(group) && qualified.thirdByGroup[group]);
-}
-
-function isValidThirdAssignment(slot, group, qualified) {
-    if (!slot || !group) return false;
-    return slot.allowed.includes(group) && getQualifiedThirdGroupSet(qualified).has(group) && Boolean(qualified.thirdByGroup[group]);
-}
-
 function getAnnexCBaseAssignments(qualified) {
     const result = {};
     if (!qualified.allGroupsFinished) return result;
 
-    const qualifiedGroups = getQualifiedThirdGroupSet(qualified);
-    const thirdGroups = Array.from(qualifiedGroups).sort().join('');
+    const thirdGroups = (qualified.thirdGroups || []).slice().sort().join('');
     if (thirdGroups.length !== 8) return result;
 
     const mapping = ANNEX_C_MAP[thirdGroups];
     if (!mapping) return result;
 
-    const used = new Set();
     const slotByWinner = new Map(THIRD_ASSIGNMENT_SLOTS.map(slot => [slot.winnerGroup, slot]));
     Object.entries(mapping).forEach(([winnerGroup, thirdGroup]) => {
         const slot = slotByWinner.get(winnerGroup);
-        if (isValidThirdAssignment(slot, thirdGroup, qualified) && !used.has(thirdGroup)) {
+        if (slot && qualified.thirdByGroup[thirdGroup]) {
             result[slot.matchId] = thirdGroup;
-            used.add(thirdGroup);
         }
     });
-    return result;
-}
-
-function getValidatedManualThirdAssignments(qualified) {
-    const result = {};
-    const used = new Set();
-
-    THIRD_ASSIGNMENT_SLOTS.forEach(slot => {
-        const group = manualThirdAssignments?.[slot.matchId];
-        if (isValidThirdAssignment(slot, group, qualified) && !used.has(group)) {
-            result[slot.matchId] = group;
-            used.add(group);
-        }
-    });
-
-    return result;
-}
-
-function buildThirdAssignments(qualified, lockedAssignments = {}) {
-    if (!qualified.allGroupsFinished) return {};
-
-    const rankedGroups = getQualifiedThirdGroups(qualified);
-    const rankedIndex = new Map(rankedGroups.map((group, idx) => [group, idx]));
-    const result = { ...lockedAssignments };
-    const used = new Set(Object.values(result).filter(Boolean));
-
-    const remainingSlots = THIRD_ASSIGNMENT_SLOTS
-        .filter(slot => !result[slot.matchId])
-        .map(slot => ({
-            slot,
-            candidates: getThirdCandidatesForSlot(slot, qualified)
-                .filter(group => !used.has(group))
-                .sort((a, b) => (rankedIndex.get(a) ?? 99) - (rankedIndex.get(b) ?? 99))
-        }))
-        .sort((a, b) => a.candidates.length - b.candidates.length);
-
-    function backtrack(index) {
-        if (index >= remainingSlots.length) return true;
-
-        const { slot } = remainingSlots[index];
-        const candidates = getThirdCandidatesForSlot(slot, qualified)
-            .filter(group => !used.has(group))
-            .sort((a, b) => (rankedIndex.get(a) ?? 99) - (rankedIndex.get(b) ?? 99));
-
-        for (const group of candidates) {
-            result[slot.matchId] = group;
-            used.add(group);
-            if (backtrack(index + 1)) return true;
-            used.delete(group);
-            delete result[slot.matchId];
-        }
-
-        return false;
-    }
-
-    if (backtrack(0)) return result;
-
-    // Fallback defensivo: si por ajustes manuales queda una combinación imposible,
-    // llenamos lo posible sin repetir y siempre respetando top 8 + grupos permitidos.
-    THIRD_ASSIGNMENT_SLOTS.forEach(slot => {
-        if (result[slot.matchId]) return;
-        const candidate = getThirdCandidatesForSlot(slot, qualified)
-            .filter(group => !used.has(group))
-            .sort((a, b) => (rankedIndex.get(a) ?? 99) - (rankedIndex.get(b) ?? 99))[0];
-        if (candidate) {
-            result[slot.matchId] = candidate;
-            used.add(candidate);
-        }
-    });
-
     return result;
 }
 
 function getSuggestedThirdAssignments(qualified) {
-    const annex = getAnnexCBaseAssignments(qualified);
-    if (Object.keys(annex).length === THIRD_ASSIGNMENT_SLOTS.length) return annex;
-    return buildThirdAssignments(qualified);
+    // En este flujo no asignamos terceros automáticamente.
+    // Se confirma el top 8 y después el usuario selecciona manualmente cada cruce.
+    return {};
 }
 
 function getEffectiveThirdAssignments(qualified) {
-    const manual = getValidatedManualThirdAssignments(qualified);
-    return buildThirdAssignments(qualified, manual);
+    if (!areThirdsConfirmed(qualified)) return {};
+
+    const topThirdGroups = getTopThirdGroupSet(qualified);
+    const used = new Set();
+    const result = {};
+
+    THIRD_ASSIGNMENT_SLOTS.forEach(slot => {
+        const group = manualThirdAssignments?.[slot.matchId];
+        if (!group) return;
+        if (!topThirdGroups.has(group)) return;
+        if (!slot.allowed.includes(group)) return;
+        if (!qualified.thirdByGroup[group]) return;
+        if (used.has(group)) return;
+
+        result[slot.matchId] = group;
+        used.add(group);
+    });
+
+    return result;
 }
 
 function applyThirdAssignmentsToBracket(qualified) {
-    if (!qualified.allGroupsFinished) return;
+    if (!areThirdsConfirmed(qualified)) return;
+
     const assignments = getEffectiveThirdAssignments(qualified);
     THIRD_ASSIGNMENT_SLOTS.forEach(slot => {
         const group = assignments[slot.matchId];
@@ -2071,43 +1964,62 @@ function renderThirdAssignmentControls(qualified) {
     if (!container) return;
 
     if (!qualified.allGroupsFinished) {
-        container.innerHTML = `<div class="third-assignment-note">Los cruces de terceros se podrán ajustar cuando terminen los 12 grupos.</div>`;
+        container.innerHTML = `<div class="third-confirm-card"><div class="third-assignment-title">Confirmación de mejores terceros</div><div class="third-assignment-note">Termina los resultados de los 12 grupos para confirmar los 8 mejores terceros.</div></div>`;
         return;
     }
 
-    const effective = getEffectiveThirdAssignments(qualified);
-    const usedByOtherSlots = (matchId) => new Set(
-        Object.entries(effective)
-            .filter(([otherMatchId]) => otherMatchId !== matchId)
-            .map(([, group]) => group)
-            .filter(Boolean)
-    );
+    const topEight = (qualified.thirdPlaceData || []).slice(0, 8);
+    const signature = getThirdConfirmationSignature(qualified);
+    const confirmed = areThirdsConfirmed(qualified);
+    const chips = topEight.map(team => {
+        const data = TEAMS_DATA[team.code] || {};
+        return `<span class="confirmed-third-chip">3${team.group} · ${escapeHTML(data.flag || '')} ${escapeHTML(data.name || team.code)}</span>`;
+    }).join('');
+
+    if (!confirmed) {
+        container.innerHTML = `
+            <div class="third-confirm-card">
+                <div class="third-assignment-title">Confirmar mejores terceros</div>
+                <div class="third-assignment-note">Revisa que estos sean los 8 terceros que clasifican. Después de confirmar, podrás colocarlos manualmente en los 8 espacios de la ronda de 32.</div>
+                <div class="confirmed-third-list">${chips}</div>
+                <button class="btn btn-sm third-confirm-btn" type="button" id="third-confirm-btn" ${signature ? '' : 'disabled'}>Confirmar mejores terceros</button>
+            </div>`;
+        return;
+    }
+
+    const selectedByOther = (matchId) => new Set(Object.entries(manualThirdAssignments || {})
+        .filter(([id, group]) => id !== matchId && group)
+        .map(([, group]) => group));
 
     container.innerHTML = `
-        <div class="third-assignment-title">Ajuste de cruces de mejores terceros</div>
-        <div class="third-assignment-note">Solo se muestran terceros clasificados dentro del top 8 y permitidos para cada cruce FIFA. No se permiten equipos eliminados ni terceros repetidos.</div>
+        <div class="third-assignment-title">Cruces manuales de mejores terceros</div>
+        <div class="third-assignment-note">Los 24 equipos de 1.º y 2.º pasan automático. Selecciona aquí qué tercer lugar confirmado entra en cada espacio permitido.</div>
+        <div class="confirmed-third-list">${chips}</div>
         <div class="third-assignment-grid">
             ${THIRD_ASSIGNMENT_SLOTS.map(slot => {
-                const current = effective[slot.matchId] || '';
-                const usedElsewhere = usedByOtherSlots(slot.matchId);
-                const options = getThirdCandidatesForSlot(slot, qualified)
-                    .filter(group => group === current || !usedElsewhere.has(group))
-                    .map(group => {
-                        const code = qualified.thirdByGroup[group];
-                        const team = TEAMS_DATA[code];
-                        return `<option value="${group}" ${group === current ? 'selected' : ''}>3${group} · ${team?.flag ?? ''} ${team?.name ?? code}</option>`;
-                    }).join('');
+                const current = manualThirdAssignments[slot.matchId] || '';
+                const blocked = selectedByOther(slot.matchId);
+                const validOptions = topEight.filter(team =>
+                    slot.allowed.includes(team.group) && (!blocked.has(team.group) || team.group === current)
+                );
+                const options = validOptions.map(team => {
+                    const data = TEAMS_DATA[team.code] || {};
+                    return `<option value="${team.group}" ${team.group === current ? 'selected' : ''}>3${team.group} · ${escapeHTML(data.flag || '')} ${escapeHTML(data.name || team.code)}</option>`;
+                }).join('');
                 return `
                     <label class="third-assignment-item">
                         <span>${slot.matchNo} · ${slot.label}</span>
                         <select class="third-assignment-select" data-match-id="${slot.matchId}">
-                            <option value="">Auto sugerido</option>
+                            <option value="">Seleccionar tercer lugar</option>
                             ${options}
                         </select>
                     </label>`;
             }).join('')}
         </div>
-        <button class="btn btn-sm" type="button" id="third-assignment-reset">Auto cruces</button>
+        <div class="third-assignment-actions">
+            <button class="btn btn-sm" type="button" id="third-assignment-reset">Limpiar cruces</button>
+            <button class="btn btn-sm" type="button" id="third-confirm-reset">Revisar terceros de nuevo</button>
+        </div>
     `;
 }
 
@@ -2126,11 +2038,15 @@ function clearBracket() {
     document.querySelectorAll('.bracket-container-topdown .match-container').forEach(match => {
         // Limpiar estados visuales
         match.querySelectorAll('.team-pill').forEach(pill => {
-            pill.classList.remove('loser', 'pending');
-            pill.classList.add('placeholder');
-            pill.innerHTML = '';
-            pill.removeAttribute('title');
-            delete pill.dataset.teamCode;
+            pill.classList.remove('loser');
+            if (!pill.classList.contains('placeholder')) {
+                pill.classList.add('placeholder');
+                pill.innerHTML = '';
+                delete pill.dataset.teamCode;
+            } else {
+                pill.innerHTML = '';
+                delete pill.dataset.teamCode;
+            }
             const scoreInput = pill.querySelector('.score');
             if (scoreInput) scoreInput.remove();
         });
@@ -2169,7 +2085,8 @@ function saveStateToStorage() {
         manual: {
             groupOrders: manualGroupOrders,
             thirdOrder: manualThirdOrder,
-            thirdAssignments: manualThirdAssignments
+            thirdAssignments: manualThirdAssignments,
+            thirdConfirmation: confirmedThirdSignature
         },
         predictions: userPredictions
     };
@@ -2221,6 +2138,7 @@ function loadStateFromStorage() {
     manualGroupOrders = savedState?.manual?.groupOrders || {};
     manualThirdOrder = savedState?.manual?.thirdOrder || [];
     manualThirdAssignments = savedState?.manual?.thirdAssignments || {};
+    confirmedThirdSignature = savedState?.manual?.thirdConfirmation || savedState?.manual?.confirmedThirdSignature || null;
     userPredictions = savedState?.predictions || savedState?.userPredictions || {};
 
     // Cargar marcadores de grupos

@@ -646,22 +646,15 @@ a{ color: inherit; text-decoration: none; }
     inset 0 1px 0 rgba(255,255,255,0.14);
 }
 
-.team-pill.placeholder{ background: rgba(255,255,255,0.04); border-style: dashed; }
-
-.team-pill.pending{
+.team-pill.placeholder{
   background: rgba(255,255,255,0.055);
   border-style: dashed;
   border-color: rgba(255,255,255,0.18);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.72);
 }
-.team-pill.pending .flag{
-  font-size: .9em;
-  opacity: .68;
-}
-.team-pill.pending .code{
-  color: rgba(255,255,255,0.62);
-  font-size: .74em;
-  font-weight: 800;
+.team-pill.placeholder .placeholder-label{
+  color: rgba(255,255,255,0.78);
+  font-size: .78em;
   letter-spacing: .01em;
 }
 
@@ -1434,6 +1427,44 @@ a{ color: inherit; text-decoration: none; }
   text-align:center;
   font-size:.9rem;
   margin-bottom:12px;
+}
+.third-confirm-card{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:10px;
+}
+.confirmed-third-list{
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:center;
+  gap:8px;
+  margin:4px 0 8px;
+}
+.confirmed-third-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  padding:7px 10px;
+  border-radius:999px;
+  background:rgba(182,255,0,.09);
+  border:1px solid rgba(182,255,0,.22);
+  color:rgba(230,255,190,.96);
+  font-weight:900;
+  font-size:.78rem;
+  max-width:240px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.third-confirm-btn{
+  min-width:210px;
+}
+.third-assignment-actions{
+  display:flex;
+  justify-content:center;
+  gap:10px;
+  flex-wrap:wrap;
 }
 .third-assignment-grid{
   display:grid;
