@@ -215,6 +215,185 @@ function renderTeamName(code, side) {
     </span>`;
 }
 
+
+let upcomingAgendaTimer = null;
+
+function parseScheduleDateToUTC(item) {
+    if (!item?.date || !item?.time) return null;
+
+    const months = {
+        enero: 0, febrero: 1, marzo: 2, abril: 3, mayo: 4, junio: 5,
+        julio: 6, agosto: 7, septiembre: 8, setiembre: 8, octubre: 9,
+        noviembre: 10, diciembre: 11
+    };
+
+    const dateMatch = String(item.date).match(/(\d{1,2})\s+([A-Za-záéíóúñ]+)\s+(\d{4})/i);
+    const timeMatch = String(item.time).match(/(\d{1,2}):(\d{2})/);
+    if (!dateMatch || !timeMatch) return null;
+
+    const day = Number(dateMatch[1]);
+    const monthName = dateMatch[2].toLowerCase();
+    const year = Number(dateMatch[3]);
+    const month = months[monthName];
+    const hour = Number(timeMatch[1]);
+    const minute = Number(timeMatch[2]);
+
+    if (Number.isNaN(day) || Number.isNaN(year) || Number.isNaN(hour) || Number.isNaN(minute) || month === undefined) {
+        return null;
+    }
+
+    return new Date(Date.UTC(year, month, day, hour + 6, minute));
+}
+
+function formatAgendaNow() {
+    return new Intl.DateTimeFormat('es-MX', {
+        timeZone: 'America/Mexico_City',
+        day: 'numeric',
+        month: 'short',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+    }).format(new Date()).replace(',', '');
+}
+
+function formatCountdown(targetDate) {
+    if (!(targetDate instanceof Date) || Number.isNaN(targetDate.getTime())) return '';
+    const diff = targetDate.getTime() - Date.now();
+    if (diff <= 0) return 'Está por iniciar o ya comenzó';
+
+    const totalMinutes = Math.floor(diff / 60000);
+    const days = Math.floor(totalMinutes / (60 * 24));
+    const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+    const minutes = totalMinutes % 60;
+
+    if (days > 0) return `Faltan ${days} d ${hours} h`;
+    if (hours > 0) return `Faltan ${hours} h ${minutes} min`;
+    return `Faltan ${minutes} min`;
+}
+
+function getGroupMatchScheduleEntries() {
+    const schedule = getScheduleData();
+    const pairings = [[0, 1], [2, 3], [0, 2], [1, 3], [0, 3], [1, 2]];
+
+    return groupsData.flatMap(group => {
+        return pairings.map(([i, j], matchIndex) => {
+            const item = schedule?.groups?.[group.id]?.[matchIndex];
+            const homeCode = group.codes[i];
+            const awayCode = group.codes[j];
+            const matchId = getGroupPredictionMatchId(group.id, matchIndex);
+            return {
+                matchId,
+                groupId: group.id,
+                matchNo: item?.no ? `M${item.no}` : `M${matchIndex + 1}`,
+                homeCode,
+                awayCode,
+                homeName: getTeamDisplayName(homeCode),
+                awayName: getTeamDisplayName(awayCode),
+                homeFlag: getTeamFlag(homeCode),
+                awayFlag: getTeamFlag(awayCode),
+                dateText: item?.date || '',
+                timeText: item?.time || '',
+                venue: item?.venue || '',
+                city: item?.city || '',
+                startsAt: parseScheduleDateToUTC(item)
+            };
+        });
+    }).sort((a, b) => {
+        const aTime = a.startsAt ? a.startsAt.getTime() : Number.MAX_SAFE_INTEGER;
+        const bTime = b.startsAt ? b.startsAt.getTime() : Number.MAX_SAFE_INTEGER;
+        return aTime - bTime;
+    });
+}
+
+function isGroupMatchCompleteById(matchId) {
+    const matchEl = document.querySelector(`.match-grid[data-match-id="${matchId}"]`);
+    if (!matchEl) return false;
+    const inputs = [...matchEl.querySelectorAll('.score-input')];
+    return inputs.length === 2 && inputs.every(input => input.value !== '');
+}
+
+function getUpcomingMatches(limit = 5) {
+    return getGroupMatchScheduleEntries()
+        .filter(entry => !isGroupMatchCompleteById(entry.matchId))
+        .slice(0, limit);
+}
+
+function renderUpcomingPanel() {
+    const nowEl = document.getElementById('upcoming-now');
+    const summaryEl = document.getElementById('upcoming-summary');
+    const listEl = document.getElementById('upcoming-list');
+    if (!nowEl || !summaryEl || !listEl) return;
+
+    nowEl.innerHTML = `<span class="upcoming-now__label">Hora CDMX</span><strong>${escapeHTML(formatAgendaNow())}</strong>`;
+
+    const matches = getUpcomingMatches(5);
+    if (!matches.length) {
+        summaryEl.innerHTML = `
+            <div class="upcoming-featured upcoming-featured--done">
+                <div class="upcoming-featured__main">
+                    <span class="upcoming-featured__tag">Agenda completa</span>
+                    <h3>Ya no hay partidos pendientes en fase de grupos</h3>
+                    <p>Todos los encuentros programados de grupos ya tienen marcador capturado.</p>
+                </div>
+            </div>`;
+        listEl.innerHTML = '';
+        return;
+    }
+
+    const [nextMatch, ...otherMatches] = matches;
+    const placeText = [nextMatch.venue, nextMatch.city].filter(Boolean).join(' · ');
+    const dateTimeText = [nextMatch.dateText, nextMatch.timeText].filter(Boolean).join(' · ');
+
+    summaryEl.innerHTML = `
+        <article class="upcoming-featured">
+            <div class="upcoming-featured__main">
+                <div class="upcoming-featured__eyebrow">
+                    <span class="upcoming-match-badge">${escapeHTML(nextMatch.matchNo)}</span>
+                    <span class="upcoming-group-pill">Grupo ${escapeHTML(nextMatch.groupId)}</span>
+                </div>
+                <h3 class="upcoming-featured__headline">Próximo partido por jugar</h3>
+                <div class="upcoming-featured__teams">
+                    <span class="upcoming-team upcoming-team--home"><span class="upcoming-team__flag">${escapeHTML(nextMatch.homeFlag)}</span><span>${escapeHTML(nextMatch.homeName)}</span></span>
+                    <span class="upcoming-featured__vs">vs</span>
+                    <span class="upcoming-team upcoming-team--away"><span class="upcoming-team__flag">${escapeHTML(nextMatch.awayFlag)}</span><span>${escapeHTML(nextMatch.awayName)}</span></span>
+                </div>
+                <div class="upcoming-featured__meta">
+                    <span>${escapeHTML(dateTimeText)}</span>
+                    ${placeText ? `<span>${escapeHTML(placeText)}</span>` : ''}
+                </div>
+            </div>
+            <div class="upcoming-featured__side">
+                <div class="upcoming-countdown">${escapeHTML(formatCountdown(nextMatch.startsAt))}</div>
+                <div class="upcoming-side-note">Se actualiza conforme capturas resultados.</div>
+            </div>
+        </article>`;
+
+    listEl.innerHTML = otherMatches.map(match => {
+        const compactDate = [match.dateText, match.timeText].filter(Boolean).join(' · ');
+        const compactPlace = [match.venue, match.city].filter(Boolean).join(' · ');
+        return `
+            <article class="upcoming-card">
+                <div class="upcoming-card__top">
+                    <span class="upcoming-match-badge">${escapeHTML(match.matchNo)}</span>
+                    <span class="upcoming-group-pill">Grupo ${escapeHTML(match.groupId)}</span>
+                </div>
+                <div class="upcoming-card__teams">
+                    <div class="upcoming-card__team"><span class="upcoming-team__flag">${escapeHTML(match.homeFlag)}</span><span>${escapeHTML(match.homeName)}</span></div>
+                    <div class="upcoming-card__vs">vs</div>
+                    <div class="upcoming-card__team"><span class="upcoming-team__flag">${escapeHTML(match.awayFlag)}</span><span>${escapeHTML(match.awayName)}</span></div>
+                </div>
+                <div class="upcoming-card__meta">${escapeHTML(compactDate)}</div>
+                <div class="upcoming-card__meta upcoming-card__meta--secondary">${escapeHTML(compactPlace)}</div>
+            </article>`;
+    }).join('');
+}
+
+function startUpcomingAgendaTicker() {
+    renderUpcomingPanel();
+    if (upcomingAgendaTimer) clearInterval(upcomingAgendaTimer);
+    upcomingAgendaTimer = setInterval(renderUpcomingPanel, 60000);
+}
+
 const THIRD_ASSIGNMENT_SLOTS = [
     { matchId: '16-2',  matchNo: 'M74', winnerGroup: 'E', label: '1E vs 3º A/B/C/D/F', allowed: ['A','B','C','D','F'] },
     { matchId: '16-5',  matchNo: 'M77', winnerGroup: 'I', label: '1I vs 3º C/D/F/G/H', allowed: ['C','D','F','G','H'] },
@@ -225,81 +404,6 @@ const THIRD_ASSIGNMENT_SLOTS = [
     { matchId: '16-13', matchNo: 'M85', winnerGroup: 'B', label: '1B vs 3º E/F/G/I/J', allowed: ['E','F','G','I','J'] },
     { matchId: '16-15', matchNo: 'M87', winnerGroup: 'K', label: '1K vs 3º D/E/I/J/L', allowed: ['D','E','I','J','L'] }
 ];
-
-
-const FIXED_R32_SLOTS = [
-    { matchId: '16-1',  home: { bucket: 'second', group: 'A', label: '2º Grupo A' }, away: { bucket: 'second', group: 'B', label: '2º Grupo B' } },
-    { matchId: '16-3',  home: { bucket: 'first',  group: 'F', label: '1º Grupo F' }, away: { bucket: 'second', group: 'C', label: '2º Grupo C' } },
-    { matchId: '16-4',  home: { bucket: 'first',  group: 'C', label: '1º Grupo C' }, away: { bucket: 'second', group: 'F', label: '2º Grupo F' } },
-    { matchId: '16-6',  home: { bucket: 'second', group: 'E', label: '2º Grupo E' }, away: { bucket: 'second', group: 'I', label: '2º Grupo I' } },
-    { matchId: '16-11', home: { bucket: 'second', group: 'K', label: '2º Grupo K' }, away: { bucket: 'second', group: 'L', label: '2º Grupo L' } },
-    { matchId: '16-12', home: { bucket: 'first',  group: 'H', label: '1º Grupo H' }, away: { bucket: 'second', group: 'J', label: '2º Grupo J' } },
-    { matchId: '16-14', home: { bucket: 'first',  group: 'J', label: '1º Grupo J' }, away: { bucket: 'second', group: 'H', label: '2º Grupo H' } },
-    { matchId: '16-16', home: { bucket: 'second', group: 'D', label: '2º Grupo D' }, away: { bucket: 'second', group: 'G', label: '2º Grupo G' } }
-];
-
-
-// Textos base visibles para que la fase eliminatoria nunca quede con casillas vacías.
-const BRACKET_DEFAULT_PLACEHOLDERS = {
-    '16-1':  { home: '2º Grupo A', away: '2º Grupo B' },
-    '16-2':  { home: '1º Grupo E', away: '3º A/B/C/D/F' },
-    '16-3':  { home: '1º Grupo F', away: '2º Grupo C' },
-    '16-4':  { home: '1º Grupo C', away: '2º Grupo F' },
-    '16-5':  { home: '1º Grupo I', away: '3º C/D/F/G/H' },
-    '16-6':  { home: '2º Grupo E', away: '2º Grupo I' },
-    '16-7':  { home: '1º Grupo A', away: '3º C/E/F/H/I' },
-    '16-8':  { home: '1º Grupo L', away: '3º E/H/I/J/K' },
-    '16-9':  { home: '1º Grupo D', away: '3º B/E/F/I/J' },
-    '16-10': { home: '1º Grupo G', away: '3º A/E/H/I/J' },
-    '16-11': { home: '2º Grupo K', away: '2º Grupo L' },
-    '16-12': { home: '1º Grupo H', away: '2º Grupo J' },
-    '16-13': { home: '1º Grupo B', away: '3º E/F/G/I/J' },
-    '16-14': { home: '1º Grupo J', away: '2º Grupo H' },
-    '16-15': { home: '1º Grupo K', away: '3º D/E/I/J/L' },
-    '16-16': { home: '2º Grupo D', away: '2º Grupo G' },
-    '8-1':   { home: 'Ganador M74', away: 'Ganador M77' },
-    '8-2':   { home: 'Ganador M73', away: 'Ganador M75' },
-    '8-3':   { home: 'Ganador M76', away: 'Ganador M78' },
-    '8-4':   { home: 'Ganador M79', away: 'Ganador M80' },
-    '8-5':   { home: 'Ganador M83', away: 'Ganador M84' },
-    '8-6':   { home: 'Ganador M81', away: 'Ganador M82' },
-    '8-7':   { home: 'Ganador M86', away: 'Ganador M88' },
-    '8-8':   { home: 'Ganador M85', away: 'Ganador M87' },
-    '4-1':   { home: 'Ganador M89', away: 'Ganador M90' },
-    '4-2':   { home: 'Ganador M91', away: 'Ganador M92' },
-    '4-3':   { home: 'Ganador M93', away: 'Ganador M94' },
-    '4-4':   { home: 'Ganador M95', away: 'Ganador M96' },
-    '2-1':   { home: 'Ganador M97', away: 'Ganador M98' },
-    '2-2':   { home: 'Ganador M99', away: 'Ganador M100' },
-    '1-1':   { home: 'Ganador M101', away: 'Ganador M102' },
-    '3-1':   { home: 'Perdedor M101', away: 'Perdedor M102' }
-};
-
-function getDefaultBracketPlaceholder(matchId, position) {
-    return BRACKET_DEFAULT_PLACEHOLDERS?.[matchId]?.[position] || 'Pendiente';
-}
-
-function renderBracketPlaceholderHTML(label, icon = '⏳') {
-    const safeLabel = escapeHTML(label || 'Pendiente');
-    return `<span class="flag bracket-placeholder-icon">${escapeHTML(icon)}</span><span class="code placeholder-label" title="${safeLabel}">${safeLabel}</span>`;
-}
-
-function renderBracketSeedPill(matchId, position) {
-    const label = getDefaultBracketPlaceholder(matchId, position);
-    return `<div class="team-pill placeholder" data-team-pos="${escapeHTML(position)}" data-placeholder="${escapeHTML(label)}">${renderBracketPlaceholderHTML(label)}</div>`;
-}
-
-function renderBracketMatchShell(matchId) {
-    return `
-        <div class="match-container" data-match-id="${escapeHTML(matchId)}">
-            ${renderBracketSeedPill(matchId, 'home')}
-            ${renderBracketSeedPill(matchId, 'away')}
-        </div>`;
-}
-
-function renderBracketRoundShell(prefix, start, count) {
-    return Array.from({ length: count }, (_, i) => renderBracketMatchShell(`${prefix}-${start + i}`)).join('');
-}
 
 function getThirdConfirmationSignature(qualified) {
     if (!qualified?.allGroupsFinished || !Array.isArray(qualified.thirdPlaceData)) return null;
@@ -330,12 +434,10 @@ function setBracketPlaceholder(matchId, position, label, icon = '⏳') {
     const pill = matchEl.querySelector(`.team-pill[data-team-pos="${position}"]`);
     if (!pill) return;
 
-    const finalLabel = label || getDefaultBracketPlaceholder(matchId, position);
     pill.classList.add('placeholder');
-    pill.classList.remove('loser', 'third-select-pill');
+    pill.classList.remove('loser');
     delete pill.dataset.teamCode;
-    pill.dataset.placeholder = finalLabel;
-    pill.innerHTML = renderBracketPlaceholderHTML(finalLabel, icon);
+    pill.innerHTML = `<span class="flag">${escapeHTML(icon)}</span><span class="code placeholder-label" title="${escapeHTML(label)}">${escapeHTML(label)}</span>`;
 }
 
 function getGroupOrderedCodesFromTable(groupId) {
@@ -374,65 +476,10 @@ function resolveFixedBracketTeamFromCurrentTable(placeholderLabel) {
     return ordered[rank - 1] || null;
 }
 
-
-
-
 function setBracketSlot(matchId, position, teamCode, placeholderLabel) {
     const resolvedCode = teamCode || resolveFixedBracketTeamFromCurrentTable(placeholderLabel);
     if (resolvedCode) updateNextMatch(matchId, position, resolvedCode);
     else setBracketPlaceholder(matchId, position, placeholderLabel);
-}
-
-function pillHasRenderableContent(pill) {
-    if (!pill) return false;
-    const text = (pill.textContent || '').replace(/\s+/g, ' ').trim();
-    return Boolean(pill.dataset.teamCode || pill.querySelector('select') || text);
-}
-
-function ensureBracketSeedVisibility(qualified) {
-    FIXED_R32_SLOTS.forEach(slot => {
-        ['home', 'away'].forEach(position => {
-            const config = slot[position];
-            const matchEl = document.querySelector(`[data-match-id="${slot.matchId}"]`);
-            const pill = matchEl?.querySelector(`.team-pill[data-team-pos="${position}"]`);
-            if (!pill || pillHasRenderableContent(pill)) return;
-            const teamCode = qualified?.[config.bucket]?.[config.group] || null;
-            setBracketSlot(slot.matchId, position, teamCode, config.label);
-        });
-    });
-
-    THIRD_ASSIGNMENT_SLOTS.forEach(slot => {
-        const homeMatch = document.querySelector(`[data-match-id="${slot.matchId}"] .team-pill[data-team-pos="home"]`);
-        if (homeMatch && !pillHasRenderableContent(homeMatch)) {
-            setBracketSlot(slot.matchId, 'home', qualified?.first?.[slot.winnerGroup] || null, `1º Grupo ${slot.winnerGroup}`);
-        }
-
-        const awayMatch = document.querySelector(`[data-match-id="${slot.matchId}"] .team-pill[data-team-pos="away"]`);
-        if (!awayMatch || pillHasRenderableContent(awayMatch)) return;
-
-        if (areThirdsConfirmed(qualified)) {
-            renderThirdSelectorInBracket(qualified, slot);
-            const refreshed = document.querySelector(`[data-match-id="${slot.matchId}"] .team-pill[data-team-pos="away"]`);
-            if (!pillHasRenderableContent(refreshed)) {
-                setBracketPlaceholder(slot.matchId, 'away', `3º ${slot.allowed.join('/')}`);
-            }
-        } else {
-            setBracketPlaceholder(slot.matchId, 'away', `3º ${slot.allowed.join('/')}`);
-        }
-    });
-}
-
-function refreshBracketSeedsFromCurrentState() {
-    const finishedGroups = new Set();
-    groupsData.forEach(group => {
-        if (isGroupCompleteForBracket(group.id)) finishedGroups.add(group.id);
-    });
-    const qualified = getQualifiedTeams({ finishedGroups });
-    ensureBracketSeedVisibility(qualified);
-}
-
-function repairEmptyBracketSeeds() {
-    requestAnimationFrame(() => refreshBracketSeedsFromCurrentState());
 }
 
 function getTopThirdGroupSet(qualified) {
@@ -985,6 +1032,7 @@ function initApp() {
     loadStateFromStorage();
     updateProgressUI();
     updateSaveIndicator();
+    startUpcomingAgendaTicker();
 
     // Verificamos si el usuario ya tiene un nombre guardado
     const savedState = JSON.parse(localStorage.getItem(storageKey));
@@ -1164,56 +1212,101 @@ function generateBracketHTML() {
     const container = document.getElementById('bracket-container');
     if (!container) return;
 
-    // Estructura de bracket con placeholders visibles desde el primer render.
-    // Así evitamos casillas vacías cuando todavía faltan resultados o terceros por elegir.
+    // Nueva estructura: dos alas (izquierda y derecha) y una columna central para la final
     container.innerHTML = `
         <div class="bracket-wing left-wing">
             <div class="bracket-round r32">
-                ${renderBracketRoundShell('16', 1, 8)}
+                ${Array.from({ length: 8 }, (_, i) => `
+                    <div class="match-container" data-match-id="16-${i + 1}">
+                        <div class="team-pill placeholder" data-team-pos="home"></div>
+                        <div class="team-pill placeholder" data-team-pos="away"></div>
+                    </div>
+                `).join('')}
             </div>
             <div class="bracket-round r16">
-                ${renderBracketRoundShell('8', 1, 4)}
+                ${Array.from({ length: 4 }, (_, i) => `
+                    <div class="match-container" data-match-id="8-${i + 1}">
+                        <div class="team-pill placeholder" data-team-pos="home"></div>
+                        <div class="team-pill placeholder" data-team-pos="away"></div>
+                    </div>
+                `).join('')}
             </div>
             <div class="bracket-round r8">
-                ${renderBracketRoundShell('4', 1, 2)}
+                ${Array.from({ length: 2 }, (_, i) => `
+                    <div class="match-container" data-match-id="4-${i + 1}">
+                        <div class="team-pill placeholder" data-team-pos="home"></div>
+                        <div class="team-pill placeholder" data-team-pos="away"></div>
+                    </div>
+                `).join('')}
             </div>
             <div class="bracket-round sf">
-                ${renderBracketMatchShell('2-1')}
+                <div class="match-container" data-match-id="2-1">
+                    <div class="team-pill placeholder" data-team-pos="home"></div>
+                    <div class="team-pill placeholder" data-team-pos="away"></div>
+                </div>
             </div>
         </div>
 
         <div class="bracket-center-final">
-            <div class="trophy-container">
-                <img src="images/copa-mundial.png" alt="Copa del Mundo" class="trophy-image">
-            </div>
+                <!-- ============================================ -->
+        <!-- === ¡AQUÍ VA EL NUEVO ÍCONO DEL TROFEO! === -->
+        <!-- ============================================ -->
+        <div class="trophy-container">
+            <img src="images/copa-mundial.png" alt="Copa del Mundo" class="trophy-image">
+        </div>
+        <!-- ============================================ -->
+        <!-- ===          FIN DEL ÍCONO               === -->
+        <!-- ============================================ -->
             <div class="final-match-wrapper">
                 <h3 class="final-title">FINAL</h3>
-                ${renderBracketMatchShell('1-1')}
+                <div class="match-container" data-match-id="1-1">
+                    <div class="team-pill placeholder" data-team-pos="home"></div>
+                    <div class="team-pill placeholder" data-team-pos="away"></div>
+                </div>
                 <div class="champion-wrapper">
                     <h3 class="champion-title">¡CAMPEÓN!</h3>
-                    <div class="team-pill placeholder champion-pill" data-match-id="champion" data-placeholder="Campeón">
-                        ${renderBracketPlaceholderHTML('Campeón', '🏆')}
-                    </div>
+                    <div class="team-pill placeholder champion-pill" data-match-id="champion"></div>
                 </div>
             </div>
             <div class="third-place-match-wrapper">
                 <h3 class="final-title">Tercer Lugar</h3>
-                ${renderBracketMatchShell('3-1')}
+                <div class="match-container" data-match-id="3-1">
+                    <div class="team-pill placeholder" data-team-pos="home"></div>
+                    <div class="team-pill placeholder" data-team-pos="away"></div>
+                </div>
             </div>
         </div>
 
         <div class="bracket-wing right-wing">
             <div class="bracket-round r32">
-                ${renderBracketRoundShell('16', 9, 8)}
+                ${Array.from({ length: 8 }, (_, i) => `
+                    <div class="match-container" data-match-id="16-${i + 9}">
+                        <div class="team-pill placeholder" data-team-pos="home"></div>
+                        <div class="team-pill placeholder" data-team-pos="away"></div>
+                    </div>
+                `).join('')}
             </div>
             <div class="bracket-round r16">
-                ${renderBracketRoundShell('8', 5, 4)}
+                ${Array.from({ length: 4 }, (_, i) => `
+                    <div class="match-container" data-match-id="8-${i + 5}">
+                        <div class="team-pill placeholder" data-team-pos="home"></div>
+                        <div class="team-pill placeholder" data-team-pos="away"></div>
+                    </div>
+                `).join('')}
             </div>
             <div class="bracket-round r8">
-                ${renderBracketRoundShell('4', 3, 2)}
+                ${Array.from({ length: 2 }, (_, i) => `
+                    <div class="match-container" data-match-id="4-${i + 3}">
+                        <div class="team-pill placeholder" data-team-pos="home"></div>
+                        <div class="team-pill placeholder" data-team-pos="away"></div>
+                    </div>
+                `).join('')}
             </div>
             <div class="bracket-round sf">
-                ${renderBracketMatchShell('2-2')}
+                <div class="match-container" data-match-id="2-2">
+                    <div class="team-pill placeholder" data-team-pos="home"></div>
+                    <div class="team-pill placeholder" data-team-pos="away"></div>
+                </div>
             </div>
         </div>
     `;
@@ -1280,6 +1373,7 @@ function initializeEventListeners() {
             markDirty();
             updateAllCalculations();
             updateProgressUI();
+            renderUpcomingPanel();
         }
     });
     document.getElementById('groups-container').addEventListener('click', (e) => {
@@ -1293,6 +1387,7 @@ function initializeEventListeners() {
             markDirty();
             updateAllCalculations();
             updateProgressUI();
+            renderUpcomingPanel();
         }
 
         if (e.target.classList.contains('manual-rank-btn')) {
@@ -1628,7 +1723,6 @@ function handleBracketScoreChange(matchContainer) {
 
     // Guardamos el estado en cualquier cambio
     saveStateToStorage();
-    repairEmptyBracketSeeds();
 }
 
 
@@ -1693,7 +1787,6 @@ function updateAllCalculations() {
 
     // Poblar bracket con lo que ya se pueda (y placeholders donde falte)
     populateBracketFIFA(qualified);
-    repairEmptyBracketSeeds();
 
     // Estadísticas globales
     updateGlobalStats();
@@ -1970,10 +2063,38 @@ function populateBracketFIFA(qualified) {
     //    Los 1º y 2º de grupo entran automáticamente.
     //    Los terceros quedan como espacios pendientes hasta confirmarlos y seleccionarlos.
     // --------------------------------------------------
-    FIXED_R32_SLOTS.forEach(slot => {
-        setBracketSlot(slot.matchId, 'home', qualified?.[slot.home.bucket]?.[slot.home.group] || null, slot.home.label);
-        setBracketSlot(slot.matchId, 'away', qualified?.[slot.away.bucket]?.[slot.away.group] || null, slot.away.label);
-    });
+
+    // M73: 2A vs 2B
+    setBracketSlot('16-1', 'home', qualified.second['A'], '2º Grupo A');
+    setBracketSlot('16-1', 'away', qualified.second['B'], '2º Grupo B');
+
+    // M75: 1F vs 2C
+    setBracketSlot('16-3', 'home', qualified.first['F'], '1º Grupo F');
+    setBracketSlot('16-3', 'away', qualified.second['C'], '2º Grupo C');
+
+    // M76: 1C vs 2F
+    setBracketSlot('16-4', 'home', qualified.first['C'], '1º Grupo C');
+    setBracketSlot('16-4', 'away', qualified.second['F'], '2º Grupo F');
+
+    // M78: 2E vs 2I
+    setBracketSlot('16-6', 'home', qualified.second['E'], '2º Grupo E');
+    setBracketSlot('16-6', 'away', qualified.second['I'], '2º Grupo I');
+
+    // M83: 2K vs 2L
+    setBracketSlot('16-11', 'home', qualified.second['K'], '2º Grupo K');
+    setBracketSlot('16-11', 'away', qualified.second['L'], '2º Grupo L');
+
+    // M84: 1H vs 2J
+    setBracketSlot('16-12', 'home', qualified.first['H'], '1º Grupo H');
+    setBracketSlot('16-12', 'away', qualified.second['J'], '2º Grupo J');
+
+    // M86: 1J vs 2H
+    setBracketSlot('16-14', 'home', qualified.first['J'], '1º Grupo J');
+    setBracketSlot('16-14', 'away', qualified.second['H'], '2º Grupo H');
+
+    // M88: 2D vs 2G
+    setBracketSlot('16-16', 'home', qualified.second['D'], '2º Grupo D');
+    setBracketSlot('16-16', 'away', qualified.second['G'], '2º Grupo G');
 
     // Partidos con terceros: lado fijo automático + tercer lugar pendiente/manual.
     THIRD_ASSIGNMENT_SLOTS.forEach(slot => {
@@ -1981,9 +2102,8 @@ function populateBracketFIFA(qualified) {
         setBracketPlaceholder(slot.matchId, 'away', `3º ${slot.allowed.join('/')}`);
     });
 
-    // Si el usuario ya confirmó terceros y asignó cruces, se colocan aquí.
+    // Se colocan aquí los mejores terceros cuando los 12 grupos ya quedaron capturados.
     applyThirdAssignmentsToBracket(qualified);
-    ensureBracketSeedVisibility(qualified);
 }
 
 // --- Tabla Annexe C (FIFA) ---
@@ -1999,60 +2119,145 @@ const ANNEX_C_MAP = {
     'EFGHIJKL': { A: 'E', B: 'J', D: 'I', E: 'F', G: 'H', I: 'G', K: 'L', L: 'K' }
 };
 
+function getQualifiedThirdGroups(qualified) {
+    return (qualified.thirdPlaceData || [])
+        .slice(0, 8)
+        .map(team => team.group)
+        .filter(Boolean);
+}
+
+function getQualifiedThirdGroupSet(qualified) {
+    return new Set(getQualifiedThirdGroups(qualified));
+}
+
+function getThirdCandidatesForSlot(slot, qualified) {
+    const qualifiedGroups = getQualifiedThirdGroupSet(qualified);
+    return slot.allowed.filter(group => qualifiedGroups.has(group) && qualified.thirdByGroup?.[group]);
+}
+
+function isValidThirdAssignment(slot, group, qualified) {
+    if (!slot || !group) return false;
+    return slot.allowed.includes(group) && getQualifiedThirdGroupSet(qualified).has(group) && Boolean(qualified.thirdByGroup?.[group]);
+}
+
 function getAnnexCBaseAssignments(qualified) {
     const result = {};
     if (!qualified.allGroupsFinished) return result;
 
-    const thirdGroups = (qualified.thirdGroups || []).slice().sort().join('');
+    const thirdGroups = getQualifiedThirdGroups(qualified).slice().sort().join('');
     if (thirdGroups.length !== 8) return result;
 
     const mapping = ANNEX_C_MAP[thirdGroups];
     if (!mapping) return result;
 
+    const used = new Set();
     const slotByWinner = new Map(THIRD_ASSIGNMENT_SLOTS.map(slot => [slot.winnerGroup, slot]));
     Object.entries(mapping).forEach(([winnerGroup, thirdGroup]) => {
         const slot = slotByWinner.get(winnerGroup);
-        if (slot && qualified.thirdByGroup[thirdGroup]) {
+        if (isValidThirdAssignment(slot, thirdGroup, qualified) && !used.has(thirdGroup)) {
             result[slot.matchId] = thirdGroup;
+            used.add(thirdGroup);
         }
     });
     return result;
 }
 
-function getSuggestedThirdAssignments(qualified) {
-    // En este flujo no asignamos terceros automáticamente.
-    // Se confirma el top 8 y después el usuario selecciona manualmente cada cruce.
-    return {};
-}
-
-function getEffectiveThirdAssignments(qualified) {
-    if (!areThirdsConfirmed(qualified)) return {};
-
-    const topThirdGroups = getTopThirdGroupSet(qualified);
-    const used = new Set();
+function getValidatedManualThirdAssignments(qualified) {
     const result = {};
+    const used = new Set();
 
     THIRD_ASSIGNMENT_SLOTS.forEach(slot => {
         const group = manualThirdAssignments?.[slot.matchId];
-        if (!group) return;
-        if (!topThirdGroups.has(group)) return;
-        if (!slot.allowed.includes(group)) return;
-        if (!qualified.thirdByGroup[group]) return;
-        if (used.has(group)) return;
-
-        result[slot.matchId] = group;
-        used.add(group);
+        if (isValidThirdAssignment(slot, group, qualified) && !used.has(group)) {
+            result[slot.matchId] = group;
+            used.add(group);
+        }
     });
 
     return result;
 }
 
+function buildThirdAssignments(qualified, lockedAssignments = {}) {
+    if (!qualified.allGroupsFinished) return {};
+
+    const rankedGroups = getQualifiedThirdGroups(qualified);
+    const rankedIndex = new Map(rankedGroups.map((group, idx) => [group, idx]));
+    const result = {};
+    const used = new Set();
+
+    // Primero respetamos cruces ya definidos (manuales u oficiales) siempre que sigan siendo válidos.
+    THIRD_ASSIGNMENT_SLOTS.forEach(slot => {
+        const group = lockedAssignments?.[slot.matchId];
+        if (isValidThirdAssignment(slot, group, qualified) && !used.has(group)) {
+            result[slot.matchId] = group;
+            used.add(group);
+        }
+    });
+
+    const remainingSlots = THIRD_ASSIGNMENT_SLOTS
+        .filter(slot => !result[slot.matchId])
+        .map(slot => ({
+            slot,
+            candidates: getThirdCandidatesForSlot(slot, qualified)
+                .filter(group => !used.has(group))
+                .sort((a, b) => (rankedIndex.get(a) ?? 99) - (rankedIndex.get(b) ?? 99))
+        }))
+        .sort((a, b) => a.candidates.length - b.candidates.length);
+
+    function backtrack(index) {
+        if (index >= remainingSlots.length) return true;
+
+        const { slot } = remainingSlots[index];
+        const candidates = getThirdCandidatesForSlot(slot, qualified)
+            .filter(group => !used.has(group))
+            .sort((a, b) => (rankedIndex.get(a) ?? 99) - (rankedIndex.get(b) ?? 99));
+
+        for (const group of candidates) {
+            result[slot.matchId] = group;
+            used.add(group);
+            if (backtrack(index + 1)) return true;
+            used.delete(group);
+            delete result[slot.matchId];
+        }
+
+        return false;
+    }
+
+    if (backtrack(0)) return result;
+
+    // Fallback defensivo: llena todo lo posible sin repetir terceros.
+    THIRD_ASSIGNMENT_SLOTS.forEach(slot => {
+        if (result[slot.matchId]) return;
+        const candidate = getThirdCandidatesForSlot(slot, qualified)
+            .filter(group => !used.has(group))
+            .sort((a, b) => (rankedIndex.get(a) ?? 99) - (rankedIndex.get(b) ?? 99))[0];
+        if (candidate) {
+            result[slot.matchId] = candidate;
+            used.add(candidate);
+        }
+    });
+
+    return result;
+}
+
+function getSuggestedThirdAssignments(qualified) {
+    const annex = getAnnexCBaseAssignments(qualified);
+    if (Object.keys(annex).length === THIRD_ASSIGNMENT_SLOTS.length) return annex;
+    return buildThirdAssignments(qualified, annex);
+}
+
+function getEffectiveThirdAssignments(qualified) {
+    const officialOrSuggested = getSuggestedThirdAssignments(qualified);
+    const manual = getValidatedManualThirdAssignments(qualified);
+    return buildThirdAssignments(qualified, { ...officialOrSuggested, ...manual });
+}
+
 function getAvailableThirdOptionsForSlot(qualified, slot) {
-    if (!areThirdsConfirmed(qualified)) return [];
+    if (!qualified.allGroupsFinished) return [];
 
     const topEight = (qualified.thirdPlaceData || []).slice(0, 8);
     const current = manualThirdAssignments?.[slot.matchId] || '';
-    const usedByOther = new Set(Object.entries(manualThirdAssignments || {})
+    const usedByOther = new Set(Object.entries(getEffectiveThirdAssignments(qualified) || {})
         .filter(([id, group]) => id !== slot.matchId && group)
         .map(([, group]) => group));
 
@@ -2070,7 +2275,7 @@ function renderThirdSelectorInBracket(qualified, slot) {
     const pill = matchEl.querySelector('.team-pill[data-team-pos="away"]');
     if (!pill || pill.dataset.teamCode) return;
 
-    if (!areThirdsConfirmed(qualified)) {
+    if (!qualified.allGroupsFinished) {
         setBracketPlaceholder(slot.matchId, 'away', `3º ${slot.allowed.join('/')}`);
         return;
     }
@@ -2099,7 +2304,7 @@ function renderThirdSelectorsInBracket(qualified) {
 }
 
 function applyThirdAssignmentsToBracket(qualified) {
-    if (!areThirdsConfirmed(qualified)) {
+    if (!qualified.allGroupsFinished) {
         renderThirdSelectorsInBracket(qualified);
         return;
     }
@@ -2119,64 +2324,55 @@ function renderThirdAssignmentControls(qualified) {
     if (!container) return;
 
     if (!qualified.allGroupsFinished) {
-        container.innerHTML = `<div class="third-confirm-card"><div class="third-assignment-title">Confirmación de mejores terceros</div><div class="third-assignment-note">Termina los resultados de los 12 grupos para confirmar los 8 mejores terceros.</div></div>`;
+        container.innerHTML = `<div class="third-confirm-card"><div class="third-assignment-title">Cruces de mejores terceros</div><div class="third-assignment-note">Cuando terminen los 12 grupos, los 8 mejores terceros se colocarán automáticamente en fase eliminatoria.</div></div>`;
         return;
     }
 
     const topEight = (qualified.thirdPlaceData || []).slice(0, 8);
-    const signature = getThirdConfirmationSignature(qualified);
-    const confirmed = areThirdsConfirmed(qualified);
+    const effective = getEffectiveThirdAssignments(qualified);
     const chips = topEight.map(team => {
         const data = TEAMS_DATA[team.code] || {};
         return `<span class="confirmed-third-chip">3${team.group} · ${escapeHTML(data.flag || '')} ${escapeHTML(data.name || team.code)}</span>`;
     }).join('');
 
-    if (!confirmed) {
-        container.innerHTML = `
-            <div class="third-confirm-card">
-                <div class="third-assignment-title">Confirmar mejores terceros</div>
-                <div class="third-assignment-note">Revisa que estos sean los 8 terceros que clasifican. Después de confirmar, podrás colocarlos manualmente en los 8 espacios de la ronda de 32.</div>
-                <div class="confirmed-third-list">${chips}</div>
-                <button class="btn btn-sm third-confirm-btn" type="button" id="third-confirm-btn" ${signature ? '' : 'disabled'}>Confirmar mejores terceros</button>
-            </div>`;
-        return;
-    }
-
-    const selectedByOther = (matchId) => new Set(Object.entries(manualThirdAssignments || {})
-        .filter(([id, group]) => id !== matchId && group)
-        .map(([, group]) => group));
+    const usedByOtherSlots = (matchId) => new Set(
+        Object.entries(effective)
+            .filter(([otherMatchId]) => otherMatchId !== matchId)
+            .map(([, group]) => group)
+            .filter(Boolean)
+    );
 
     container.innerHTML = `
-        <div class="third-assignment-title">Cruces manuales de mejores terceros</div>
-        <div class="third-assignment-note">Los 24 equipos de 1.º y 2.º pasan automático. Selecciona aquí qué tercer lugar confirmado entra en cada espacio permitido.</div>
+        <div class="third-assignment-title">Cruces automáticos de mejores terceros</div>
+        <div class="third-assignment-note">Los 24 equipos de 1.º y 2.º pasan automático. Los 8 mejores terceros también se colocan en automático; puedes ajustar manualmente cada cruce si lo necesitas.</div>
         <div class="confirmed-third-list">${chips}</div>
         <div class="third-assignment-grid">
             ${THIRD_ASSIGNMENT_SLOTS.map(slot => {
-                const current = manualThirdAssignments[slot.matchId] || '';
-                const blocked = selectedByOther(slot.matchId);
-                const validOptions = topEight.filter(team =>
-                    slot.allowed.includes(team.group) && (!blocked.has(team.group) || team.group === current)
-                );
-                const options = validOptions.map(team => {
-                    const data = TEAMS_DATA[team.code] || {};
-                    return `<option value="${team.group}" ${team.group === current ? 'selected' : ''}>3${team.group} · ${escapeHTML(data.flag || '')} ${escapeHTML(data.name || team.code)}</option>`;
-                }).join('');
+                const current = effective[slot.matchId] || '';
+                const usedElsewhere = usedByOtherSlots(slot.matchId);
+                const options = getThirdCandidatesForSlot(slot, qualified)
+                    .filter(group => group === current || !usedElsewhere.has(group))
+                    .map(group => {
+                        const code = qualified.thirdByGroup[group];
+                        const data = TEAMS_DATA[code] || {};
+                        return `<option value="${group}" ${group === current ? 'selected' : ''}>3${group} · ${escapeHTML(data.flag || '')} ${escapeHTML(data.name || code)}</option>`;
+                    }).join('');
                 return `
                     <label class="third-assignment-item">
                         <span>${slot.matchNo} · ${slot.label}</span>
                         <select class="third-assignment-select" data-match-id="${slot.matchId}">
-                            <option value="">Seleccionar tercer lugar</option>
+                            <option value="">Auto sugerido</option>
                             ${options}
                         </select>
                     </label>`;
             }).join('')}
         </div>
         <div class="third-assignment-actions">
-            <button class="btn btn-sm" type="button" id="third-assignment-reset">Limpiar cruces</button>
-            <button class="btn btn-sm" type="button" id="third-confirm-reset">Revisar terceros de nuevo</button>
+            <button class="btn btn-sm" type="button" id="third-assignment-reset">Auto cruces</button>
         </div>
     `;
 }
+
 
 function resolveThirdOpponentsFromAnnexC(qualified) {
     applyThirdAssignmentsToBracket(qualified);
@@ -2191,30 +2387,27 @@ function populateBracket(qualified) {
 
 function clearBracket() {
     document.querySelectorAll('.bracket-container-topdown .match-container').forEach(match => {
-        const matchId = match.dataset.matchId;
-        match.querySelectorAll('.team-pill[data-team-pos]').forEach(pill => {
-            const pos = pill.dataset.teamPos;
-            const label = getDefaultBracketPlaceholder(matchId, pos);
-            pill.classList.add('placeholder');
-            pill.classList.remove('loser', 'third-select-pill');
-            delete pill.dataset.teamCode;
-            delete pill.dataset.tiebreakWinner;
-            pill.dataset.placeholder = label;
-            pill.innerHTML = renderBracketPlaceholderHTML(label);
+        // Limpiar estados visuales
+        match.querySelectorAll('.team-pill').forEach(pill => {
+            pill.classList.remove('loser');
+            if (!pill.classList.contains('placeholder')) {
+                pill.classList.add('placeholder');
+                pill.innerHTML = '';
+                delete pill.dataset.teamCode;
+            } else {
+                pill.innerHTML = '';
+                delete pill.dataset.teamCode;
+            }
+            const scoreInput = pill.querySelector('.score');
+            if (scoreInput) scoreInput.remove();
         });
-        delete match.dataset.penalties;
-        delete match.dataset.tiebreakWinner;
-        const meta = match.querySelector('.match-meta');
-        if (meta) meta.innerHTML = '';
     });
 
-    // Limpiar campeón sin dejar la pastilla vacía.
+    // Limpiar campeón
     const champ = document.querySelector('[data-match-id="champion"]');
     if (champ) {
         champ.classList.add('placeholder');
-        champ.classList.remove('loser');
-        champ.dataset.placeholder = 'Campeón';
-        champ.innerHTML = renderBracketPlaceholderHTML('Campeón', '🏆');
+        champ.innerHTML = '';
         delete champ.dataset.teamCode;
     }
 }
@@ -2371,7 +2564,6 @@ function loadStateFromStorage() {
     }
 
     isLoading = false; // --- Desactivamos la bandera de carga al finalizar ---
-    repairEmptyBracketSeeds();
 }
 
 // ==================================================
