@@ -311,6 +311,13 @@ function resolveFixedBracketTeamFromCurrentTable(placeholderLabel) {
 
 
 
+
+function setBracketSlot(matchId, position, teamCode, placeholderLabel) {
+    const resolvedCode = teamCode || resolveFixedBracketTeamFromCurrentTable(placeholderLabel);
+    if (resolvedCode) updateNextMatch(matchId, position, resolvedCode);
+    else setBracketPlaceholder(matchId, position, placeholderLabel);
+}
+
 function pillHasRenderableContent(pill) {
     if (!pill) return false;
     const text = (pill.textContent || '').replace(/\s+/g, ' ').trim();
@@ -1666,6 +1673,7 @@ function updateAllCalculations() {
 
     // Poblar bracket con lo que ya se pueda (y placeholders donde falte)
     populateBracketFIFA(qualified);
+    repairEmptyBracketSeeds();
 
     // Estadísticas globales
     updateGlobalStats();
