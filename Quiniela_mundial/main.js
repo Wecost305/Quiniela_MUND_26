@@ -502,12 +502,63 @@ function ensureBracketPillFallbackLabels() {
 
         Object.entries(slots).forEach(([position, label]) => {
             const pill = matchEl.querySelector(`.team-pill[data-team-pos="${position}"]`);
-            if (!pill || pill.dataset.teamCode || pill.querySelector('select')) return;
+            if (!pill || pill.dataset.teamCode) return;
 
             const hasVisibleText = (pill.textContent || '').trim().length > 0;
             if (!hasVisibleText) setBracketPlaceholder(matchId, position, label);
         });
     });
+}
+
+function getBracketRound32DebugSnapshot(qualified) {
+    const assignments = qualified?.allGroupsFinished ? getEffectiveThirdAssignments(qualified) : {};
+    return {
+        allGroupsFinished: Boolean(qualified?.allGroupsFinished),
+        first: qualified?.first || {},
+        second: qualified?.second || {},
+        thirdGroups: qualified?.thirdGroups || [],
+        thirdAssignments: assignments
+    };
+}
+
+function forceVisibleRound32FromQualified(qualified) {
+    // Último candado: si el cálculo existe, la ronda de 32 debe verse aunque el storage
+    // de eliminatoria esté vacío o aunque no existan resultados capturados en eliminatoria.
+    if (!qualified) return;
+
+    const fixedSlots = [
+        ['16-1', 'home', qualified.second?.A, '2º Grupo A'],
+        ['16-1', 'away', qualified.second?.B, '2º Grupo B'],
+        ['16-3', 'home', qualified.first?.F, '1º Grupo F'],
+        ['16-3', 'away', qualified.second?.C, '2º Grupo C'],
+        ['16-4', 'home', qualified.first?.C, '1º Grupo C'],
+        ['16-4', 'away', qualified.second?.F, '2º Grupo F'],
+        ['16-6', 'home', qualified.second?.E, '2º Grupo E'],
+        ['16-6', 'away', qualified.second?.I, '2º Grupo I'],
+        ['16-11', 'home', qualified.second?.K, '2º Grupo K'],
+        ['16-11', 'away', qualified.second?.L, '2º Grupo L'],
+        ['16-12', 'home', qualified.first?.H, '1º Grupo H'],
+        ['16-12', 'away', qualified.second?.J, '2º Grupo J'],
+        ['16-14', 'home', qualified.first?.J, '1º Grupo J'],
+        ['16-14', 'away', qualified.second?.H, '2º Grupo H'],
+        ['16-16', 'home', qualified.second?.D, '2º Grupo D'],
+        ['16-16', 'away', qualified.second?.G, '2º Grupo G']
+    ];
+
+    fixedSlots.forEach(([matchId, position, code, label]) => {
+        if (code) updateNextMatch(matchId, position, code);
+        else setBracketPlaceholder(matchId, position, label);
+    });
+
+    THIRD_ASSIGNMENT_SLOTS.forEach(slot => {
+        const homeCode = qualified.first?.[slot.winnerGroup];
+        if (homeCode) updateNextMatch(slot.matchId, 'home', homeCode);
+        else setBracketPlaceholder(slot.matchId, 'home', `1º Grupo ${slot.winnerGroup}`);
+    });
+
+    applyThirdAssignmentsToBracket(qualified);
+    ensureBracketPillFallbackLabels();
+    window.__QM2026_LAST_BRACKET_SNAPSHOT__ = getBracketRound32DebugSnapshot(qualified);
 }
 
 function syncThirdConfirmationWithQualified(qualified) {
@@ -1906,6 +1957,7 @@ function updateAllCalculations() {
     updateGlobalStats();
 
     updateProgressUI();
+    if (typeof showFixtureDebugPanel === 'function') showFixtureDebugPanel(resolveSavedStateForCurrentUser());
     saveStateToStorage();
 }
 
@@ -2221,6 +2273,10 @@ function populateBracketFIFA(qualified) {
 
     // Respaldo visual: ningún espacio de eliminatoria debe quedar en blanco.
     ensureBracketPillFallbackLabels();
+
+    // Reparación directa: vuelve a pintar la ronda de 32 desde la tabla calculada,
+    // sin depender de resultados guardados en eliminatoria ni de confirmaciones manuales.
+    forceVisibleRound32FromQualified(qualified);
 }
 
 // --- Tabla Annexe C (FIFA) ---
@@ -2398,34 +2454,17 @@ function getAvailableThirdOptionsForSlot(qualified, slot) {
 }
 
 function renderThirdSelectorInBracket(qualified, slot) {
+    // Antes se insertaba un <select> dentro del bracket. En algunos navegadores móviles/desktop
+    // ese select podía quedar sin texto visible o dar la impresión de cápsula vacía.
+    // Ahora el bracket solo muestra equipo real o etiqueta fija; los ajustes manuales siguen abajo
+    // en el panel de cruces de mejores terceros.
     const matchEl = document.querySelector(`[data-match-id="${slot.matchId}"]`);
     if (!matchEl) return;
 
     const pill = matchEl.querySelector('.team-pill[data-team-pos="away"]');
     if (!pill || pill.dataset.teamCode) return;
 
-    if (!qualified.allGroupsFinished) {
-        setBracketPlaceholder(slot.matchId, 'away', `3º ${slot.allowed.join('/')}`);
-        return;
-    }
-
-    const current = getEffectiveThirdAssignments(qualified)[slot.matchId] || manualThirdAssignments?.[slot.matchId] || '';
-    const options = getAvailableThirdOptionsForSlot(qualified, slot);
-    const optionHTML = options.map(team => {
-        const data = TEAMS_DATA[team.code] || {};
-        const label = `3${team.group} · ${data.flag || ''} ${data.name || team.code}`;
-        return `<option value="${team.group}" ${team.group === current ? 'selected' : ''}>${escapeHTML(label)}</option>`;
-    }).join('');
-
-    pill.classList.add('placeholder', 'third-select-pill');
-    pill.classList.remove('loser');
-    delete pill.dataset.teamCode;
-    pill.innerHTML = `
-        <span class="flag">⏳</span>
-        <select class="bracket-third-select" data-match-id="${escapeHTML(slot.matchId)}" title="Seleccionar tercer lugar para ${escapeHTML(slot.matchNo)}">
-            <option value="">3º ${escapeHTML(slot.allowed.join('/'))}</option>
-            ${optionHTML}
-        </select>`;
+    setBracketPlaceholder(slot.matchId, 'away', `3º ${slot.allowed.join('/')}`);
 }
 
 function renderThirdSelectorsInBracket(qualified) {
@@ -2433,19 +2472,18 @@ function renderThirdSelectorsInBracket(qualified) {
 }
 
 function applyThirdAssignmentsToBracket(qualified) {
-    if (!qualified.allGroupsFinished) {
-        renderThirdSelectorsInBracket(qualified);
-        return;
-    }
+    const assignments = qualified?.allGroupsFinished ? getEffectiveThirdAssignments(qualified) : {};
 
-    const assignments = getEffectiveThirdAssignments(qualified);
     THIRD_ASSIGNMENT_SLOTS.forEach(slot => {
         const group = assignments[slot.matchId];
         const code = group ? qualified.thirdByGroup[group] : null;
-        if (code) updateNextMatch(slot.matchId, 'away', code);
-    });
 
-    renderThirdSelectorsInBracket(qualified);
+        if (code) {
+            updateNextMatch(slot.matchId, 'away', code);
+        } else {
+            setBracketPlaceholder(slot.matchId, 'away', `3º ${slot.allowed.join('/')}`);
+        }
+    });
 }
 
 function renderThirdAssignmentControls(qualified) {
@@ -2675,6 +2713,17 @@ function showFixtureDebugPanel(savedState) {
             document.body.appendChild(box);
         }
 
+        const snap = window.__QM2026_LAST_BRACKET_SNAPSHOT__;
+        const snapText = snap ? [
+            '',
+            'snapshot eliminatoria calculada:',
+            `grupos completos para bracket: ${snap.allGroupsFinished ? 'sí' : 'no'}`,
+            `primeros: ${JSON.stringify(snap.first)}`,
+            `segundos: ${JSON.stringify(snap.second)}`,
+            `terceros top8: ${(snap.thirdGroups || []).join(',')}`,
+            `cruces terceros: ${JSON.stringify(snap.thirdAssignments || {})}`
+        ].join('\n') : '';
+
         box.textContent = [
             'DEBUG QUINIELA MUNDIAL 2026',
             `storageKey actual: ${storageKey}`,
@@ -2685,7 +2734,8 @@ function showFixtureDebugPanel(savedState) {
             window.__QM2026_STORAGE_MIGRATION__ ? `migración: ${window.__QM2026_STORAGE_MIGRATION__.from} -> ${window.__QM2026_STORAGE_MIGRATION__.to}` : 'migración: no aplicada',
             '',
             'llaves locales detectadas:',
-            allKeys || '(ninguna)'
+            allKeys || '(ninguna)',
+            snapText
         ].join('\n');
     } catch (e) {}
 }
