@@ -1880,3 +1880,35 @@ a{ color: inherit; text-decoration: none; }
   opacity: .95;
   font-size: 1em;
 }
+
+
+/* Selector manual de terceros dentro del bracket */
+.team-pill.third-select-placeholder{
+  grid-template-columns: 25px minmax(0, 1fr);
+  overflow: visible;
+  min-width: 190px;
+}
+.bracket-third-select{
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  border: 1px solid rgba(0,229,255,0.28);
+  border-radius: 12px;
+  background: rgba(5,10,22,0.94);
+  color: rgba(255,255,255,0.94);
+  font-weight: 850;
+  font-size: .74rem;
+  padding: 0 8px;
+  outline: none;
+}
+.bracket-third-select:focus{
+  border-color: rgba(0,229,255,0.70);
+  box-shadow: 0 0 0 3px rgba(0,229,255,0.12);
+}
+.team-pill.third-select-placeholder .bracket-placeholder-icon{
+  color: #00e5ff;
+}
+@media (max-width: 900px){
+  .team-pill.third-select-placeholder{ min-width: 165px; }
+  .bracket-third-select{ font-size: .68rem; }
+}

@@ -1941,14 +1941,14 @@ function populateBracketFIFA(qualified) {
     setBracketSlot('16-16', 'home', qualified.second['D'], '2º Grupo D');
     setBracketSlot('16-16', 'away', qualified.second['G'], '2º Grupo G');
 
-    // Partidos con terceros: lado fijo automático + tercer lugar pendiente/manual.
+    // Partidos con terceros:
+    // - El 1º de grupo se llena automático cuando su grupo está terminado.
+    // - El espacio de 3º queda pendiente hasta confirmar mejores terceros.
+    // - Después de confirmar, se muestra un selector directo dentro del bracket.
     THIRD_ASSIGNMENT_SLOTS.forEach(slot => {
         setBracketSlot(slot.matchId, 'home', qualified.first[slot.winnerGroup], `1º Grupo ${slot.winnerGroup}`);
-        setBracketPlaceholder(slot.matchId, 'away', `3º ${slot.allowed.join('/')}`);
+        setThirdBracketSlot(slot, qualified);
     });
-
-    // Si el usuario ya confirmó terceros y asignó cruces, se colocan aquí.
-    applyThirdAssignmentsToBracket(qualified);
 }
 
 // --- Tabla Annexe C (FIFA) ---
@@ -2012,6 +2012,64 @@ function getEffectiveThirdAssignments(qualified) {
     return result;
 }
 
+function getThirdGroupsUsedByOtherSlots(currentMatchId) {
+    return new Set(Object.entries(manualThirdAssignments || {})
+        .filter(([matchId, group]) => matchId !== currentMatchId && group)
+        .map(([, group]) => group));
+}
+
+function getValidThirdOptionsForSlot(slot, qualified) {
+    const current = manualThirdAssignments?.[slot.matchId] || '';
+    const blocked = getThirdGroupsUsedByOtherSlots(slot.matchId);
+    return getConfirmedThirdTeams(qualified).filter(team =>
+        slot.allowed.includes(team.group) && (!blocked.has(team.group) || team.group === current)
+    );
+}
+
+function renderThirdBracketSelectHTML(slot, qualified) {
+    const current = manualThirdAssignments?.[slot.matchId] || '';
+    const label = `3º ${slot.allowed.join('/')}`;
+    const options = getValidThirdOptionsForSlot(slot, qualified).map(team => {
+        const data = TEAMS_DATA[team.code] || {};
+        const selected = team.group === current ? 'selected' : '';
+        return `<option value="${team.group}" ${selected}>3${team.group} · ${escapeHTML(data.flag || '')} ${escapeHTML(data.name || team.code)}</option>`;
+    }).join('');
+
+    return `
+        <span class="flag bracket-placeholder-icon">🎯</span>
+        <select class="third-assignment-select bracket-third-select" data-match-id="${slot.matchId}" title="Selecciona tercer lugar clasificado">
+            <option value="">${escapeHTML(label)}</option>
+            ${options}
+        </select>`;
+}
+
+function setThirdBracketSlot(slot, qualified) {
+    const assignments = getEffectiveThirdAssignments(qualified);
+    const group = assignments[slot.matchId];
+    const code = group ? qualified.thirdByGroup[group] : null;
+
+    if (code) {
+        updateNextMatch(slot.matchId, 'away', code);
+        return;
+    }
+
+    if (!areThirdsConfirmed(qualified)) {
+        setBracketPlaceholder(slot.matchId, 'away', `3º ${slot.allowed.join('/')}`);
+        return;
+    }
+
+    const matchEl = document.querySelector(`[data-match-id="${slot.matchId}"]`);
+    const pill = matchEl?.querySelector('.team-pill[data-team-pos="away"]');
+    if (!pill) return;
+
+    const label = `3º ${slot.allowed.join('/')}`;
+    pill.classList.add('placeholder', 'third-select-placeholder');
+    pill.classList.remove('loser');
+    delete pill.dataset.teamCode;
+    pill.dataset.placeholder = label;
+    pill.innerHTML = renderThirdBracketSelectHTML(slot, qualified);
+}
+
 function applyThirdAssignmentsToBracket(qualified) {
     if (!areThirdsConfirmed(qualified)) return;
 
@@ -2051,10 +2109,6 @@ function renderThirdAssignmentControls(qualified) {
         return;
     }
 
-    const selectedByOther = (matchId) => new Set(Object.entries(manualThirdAssignments || {})
-        .filter(([id, group]) => id !== matchId && group)
-        .map(([, group]) => group));
-
     container.innerHTML = `
         <div class="third-assignment-title">Cruces manuales de mejores terceros</div>
         <div class="third-assignment-note">Los 24 equipos de 1.º y 2.º pasan automático. Selecciona aquí qué tercer lugar confirmado entra en cada espacio permitido.</div>
@@ -2062,10 +2116,7 @@ function renderThirdAssignmentControls(qualified) {
         <div class="third-assignment-grid">
             ${THIRD_ASSIGNMENT_SLOTS.map(slot => {
                 const current = manualThirdAssignments[slot.matchId] || '';
-                const blocked = selectedByOther(slot.matchId);
-                const validOptions = topEight.filter(team =>
-                    slot.allowed.includes(team.group) && (!blocked.has(team.group) || team.group === current)
-                );
+                const validOptions = getValidThirdOptionsForSlot(slot, qualified);
                 const options = validOptions.map(team => {
                     const data = TEAMS_DATA[team.code] || {};
                     return `<option value="${team.group}" ${team.group === current ? 'selected' : ''}>3${team.group} · ${escapeHTML(data.flag || '')} ${escapeHTML(data.name || team.code)}</option>`;
