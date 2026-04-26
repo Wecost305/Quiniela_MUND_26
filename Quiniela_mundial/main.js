@@ -21,6 +21,64 @@ let confirmedThirdSignature = null;
 let userPredictions = {};
 
 
+// Diagnóstico visual mínimo: solo aparece si hay un error real de JavaScript.
+// Ayuda a identificar problemas sin abrir herramientas del navegador.
+(function initFixtureDiagnostics() {
+    if (typeof window === 'undefined' || window.__QM2026_DIAGNOSTICS_INSTALLED__) return;
+    window.__QM2026_DIAGNOSTICS_INSTALLED__ = true;
+    window.__QM2026_ERRORS__ = [];
+
+    function showFixtureError(message, source, line, column) {
+        const cleanMessage = String(message || 'Error no identificado');
+        window.__QM2026_ERRORS__.push({
+            message: cleanMessage,
+            source: source || '',
+            line: line || 0,
+            column: column || 0,
+            time: new Date().toISOString()
+        });
+
+        try {
+            let box = document.getElementById('qm2026-error-box');
+            if (!box) {
+                box = document.createElement('div');
+                box.id = 'qm2026-error-box';
+                box.style.cssText = [
+                    'position:fixed',
+                    'left:12px',
+                    'right:12px',
+                    'bottom:12px',
+                    'z-index:999999',
+                    'background:rgba(80,0,0,.94)',
+                    'color:#fff',
+                    'border:1px solid rgba(255,255,255,.35)',
+                    'border-radius:10px',
+                    'padding:10px 12px',
+                    'font:12px/1.35 monospace',
+                    'box-shadow:0 10px 35px rgba(0,0,0,.45)',
+                    'white-space:pre-wrap'
+                ].join(';');
+                document.body.appendChild(box);
+            }
+            box.textContent = `Error detectado en fase eliminatoria:\n${cleanMessage}\n${source || ''}${line ? ':' + line : ''}${column ? ':' + column : ''}\n\nTambién queda registrado en consola y en window.__QM2026_ERRORS__.`;
+        } catch (e) {
+            // Si aún no existe document.body, el error queda en consola.
+        }
+    }
+
+    window.addEventListener('error', function (event) {
+        showFixtureError(event.message, event.filename, event.lineno, event.colno);
+    });
+
+    window.addEventListener('unhandledrejection', function (event) {
+        const reason = event.reason;
+        const message = reason && reason.stack ? reason.stack : (reason && reason.message ? reason.message : reason);
+        showFixtureError(message || 'Promesa rechazada sin detalle');
+    });
+})();
+
+
+
 // Calendario mostrado en hora local de Ciudad de México (CDMX).
 // Si existe window.MATCH_SCHEDULE se usa ese; si no, esta copia interna evita depender de otro archivo.
 const MATCH_SCHEDULE_FALLBACK = {
@@ -404,6 +462,64 @@ const THIRD_ASSIGNMENT_SLOTS = [
     { matchId: '16-13', matchNo: 'M85', winnerGroup: 'B', label: '1B vs 3º E/F/G/I/J', allowed: ['E','F','G','I','J'] },
     { matchId: '16-15', matchNo: 'M87', winnerGroup: 'K', label: '1K vs 3º D/E/I/J/L', allowed: ['D','E','I','J','L'] }
 ];
+
+
+const BRACKET_FALLBACK_LABELS = {
+    '16-1':  { home: '2º Grupo A', away: '2º Grupo B' },
+    '16-2':  { home: '1º Grupo E', away: '3º A/B/C/D/F' },
+    '16-3':  { home: '1º Grupo F', away: '2º Grupo C' },
+    '16-4':  { home: '1º Grupo C', away: '2º Grupo F' },
+    '16-5':  { home: '1º Grupo I', away: '3º C/D/F/G/H' },
+    '16-6':  { home: '2º Grupo E', away: '2º Grupo I' },
+    '16-7':  { home: '1º Grupo A', away: '3º C/E/F/H/I' },
+    '16-8':  { home: '1º Grupo L', away: '3º E/H/I/J/K' },
+    '16-9':  { home: '1º Grupo D', away: '3º B/E/F/I/J' },
+    '16-10': { home: '1º Grupo G', away: '3º A/E/H/I/J' },
+    '16-11': { home: '2º Grupo K', away: '2º Grupo L' },
+    '16-12': { home: '1º Grupo H', away: '2º Grupo J' },
+    '16-13': { home: '1º Grupo B', away: '3º E/F/G/I/J' },
+    '16-14': { home: '1º Grupo J', away: '2º Grupo H' },
+    '16-15': { home: '1º Grupo K', away: '3º D/E/I/J/L' },
+    '16-16': { home: '2º Grupo D', away: '2º Grupo G' },
+    '8-1':   { home: 'Ganador M74',  away: 'Ganador M77' },
+    '8-2':   { home: 'Ganador M73',  away: 'Ganador M75' },
+    '8-3':   { home: 'Ganador M76',  away: 'Ganador M78' },
+    '8-4':   { home: 'Ganador M79',  away: 'Ganador M80' },
+    '8-5':   { home: 'Ganador M83',  away: 'Ganador M84' },
+    '8-6':   { home: 'Ganador M81',  away: 'Ganador M82' },
+    '8-7':   { home: 'Ganador M86',  away: 'Ganador M88' },
+    '8-8':   { home: 'Ganador M85',  away: 'Ganador M87' },
+    '4-1':   { home: 'Ganador M89',  away: 'Ganador M90' },
+    '4-2':   { home: 'Ganador M91',  away: 'Ganador M92' },
+    '4-3':   { home: 'Ganador M93',  away: 'Ganador M94' },
+    '4-4':   { home: 'Ganador M95',  away: 'Ganador M96' },
+    '2-1':   { home: 'Ganador M97',  away: 'Ganador M98' },
+    '2-2':   { home: 'Ganador M99',  away: 'Ganador M100' },
+    '1-1':   { home: 'Ganador M101', away: 'Ganador M102' },
+    '3-1':   { home: 'Perdedor M101', away: 'Perdedor M102' }
+};
+
+function ensureBracketPillFallbackLabels() {
+    Object.entries(BRACKET_FALLBACK_LABELS).forEach(([matchId, slots]) => {
+        const matchEl = document.querySelector(`[data-match-id="${matchId}"]`);
+        if (!matchEl) return;
+
+        Object.entries(slots).forEach(([position, label]) => {
+            const pill = matchEl.querySelector(`.team-pill[data-team-pos="${position}"]`);
+            if (!pill || pill.dataset.teamCode || pill.querySelector('select')) return;
+
+            const hasVisibleText = (pill.textContent || '').trim().length > 0;
+            if (!hasVisibleText) setBracketPlaceholder(matchId, position, label);
+        });
+    });
+}
+
+function syncThirdConfirmationWithQualified(qualified) {
+    const signature = getThirdConfirmationSignature(qualified);
+    if (signature && confirmedThirdSignature !== signature) {
+        confirmedThirdSignature = signature;
+    }
+}
 
 function getThirdConfirmationSignature(qualified) {
     if (!qualified?.allGroupsFinished || !Array.isArray(qualified.thirdPlaceData)) return null;
@@ -1780,6 +1896,7 @@ function updateAllCalculations() {
 
     // Calcular clasificados (soporta avance parcial)
     const qualified = getQualifiedTeams({ finishedGroups });
+    syncThirdConfirmationWithQualified(qualified);
 
     // Actualizar tabla de terceros SIEMPRE (muestra provisional si faltan grupos)
     updateThirdPlaceTable(qualified);
@@ -2102,8 +2219,11 @@ function populateBracketFIFA(qualified) {
         setBracketPlaceholder(slot.matchId, 'away', `3º ${slot.allowed.join('/')}`);
     });
 
-    // Se colocan aquí los mejores terceros cuando los 12 grupos ya quedaron capturados.
+    // Los terceros se colocan automáticamente cuando los 12 grupos están completos.
     applyThirdAssignmentsToBracket(qualified);
+
+    // Respaldo visual: ningún espacio de eliminatoria debe quedar en blanco.
+    ensureBracketPillFallbackLabels();
 }
 
 // --- Tabla Annexe C (FIFA) ---
@@ -2118,6 +2238,7 @@ const ANNEX_C_MAP = {
     // (Ejemplo tomado del reglamento, Option 1)
     'EFGHIJKL': { A: 'E', B: 'J', D: 'I', E: 'F', G: 'H', I: 'G', K: 'L', L: 'K' }
 };
+
 
 function getQualifiedThirdGroups(qualified) {
     return (qualified.thirdPlaceData || [])
@@ -2136,8 +2257,10 @@ function getThirdCandidatesForSlot(slot, qualified) {
 }
 
 function isValidThirdAssignment(slot, group, qualified) {
-    if (!slot || !group) return false;
-    return slot.allowed.includes(group) && getQualifiedThirdGroupSet(qualified).has(group) && Boolean(qualified.thirdByGroup?.[group]);
+    if (!slot || !group || !qualified?.allGroupsFinished) return false;
+    return slot.allowed.includes(group) &&
+        getQualifiedThirdGroupSet(qualified).has(group) &&
+        Boolean(qualified.thirdByGroup?.[group]);
 }
 
 function getAnnexCBaseAssignments(qualified) {
@@ -2152,6 +2275,7 @@ function getAnnexCBaseAssignments(qualified) {
 
     const used = new Set();
     const slotByWinner = new Map(THIRD_ASSIGNMENT_SLOTS.map(slot => [slot.winnerGroup, slot]));
+
     Object.entries(mapping).forEach(([winnerGroup, thirdGroup]) => {
         const slot = slotByWinner.get(winnerGroup);
         if (isValidThirdAssignment(slot, thirdGroup, qualified) && !used.has(thirdGroup)) {
@@ -2159,6 +2283,7 @@ function getAnnexCBaseAssignments(qualified) {
             used.add(thirdGroup);
         }
     });
+
     return result;
 }
 
@@ -2181,11 +2306,10 @@ function buildThirdAssignments(qualified, lockedAssignments = {}) {
     if (!qualified.allGroupsFinished) return {};
 
     const rankedGroups = getQualifiedThirdGroups(qualified);
-    const rankedIndex = new Map(rankedGroups.map((group, idx) => [group, idx]));
+    const rankedIndex = new Map(rankedGroups.map((group, index) => [group, index]));
     const result = {};
     const used = new Set();
 
-    // Primero respetamos cruces ya definidos (manuales u oficiales) siempre que sigan siendo válidos.
     THIRD_ASSIGNMENT_SLOTS.forEach(slot => {
         const group = lockedAssignments?.[slot.matchId];
         if (isValidThirdAssignment(slot, group, qualified) && !used.has(group)) {
@@ -2196,18 +2320,17 @@ function buildThirdAssignments(qualified, lockedAssignments = {}) {
 
     const remainingSlots = THIRD_ASSIGNMENT_SLOTS
         .filter(slot => !result[slot.matchId])
-        .map(slot => ({
-            slot,
-            candidates: getThirdCandidatesForSlot(slot, qualified)
-                .filter(group => !used.has(group))
-                .sort((a, b) => (rankedIndex.get(a) ?? 99) - (rankedIndex.get(b) ?? 99))
-        }))
-        .sort((a, b) => a.candidates.length - b.candidates.length);
+        .slice()
+        .sort((a, b) => {
+            const ca = getThirdCandidatesForSlot(a, qualified).filter(group => !used.has(group)).length;
+            const cb = getThirdCandidatesForSlot(b, qualified).filter(group => !used.has(group)).length;
+            return ca - cb;
+        });
 
     function backtrack(index) {
         if (index >= remainingSlots.length) return true;
 
-        const { slot } = remainingSlots[index];
+        const slot = remainingSlots[index];
         const candidates = getThirdCandidatesForSlot(slot, qualified)
             .filter(group => !used.has(group))
             .sort((a, b) => (rankedIndex.get(a) ?? 99) - (rankedIndex.get(b) ?? 99));
@@ -2215,7 +2338,9 @@ function buildThirdAssignments(qualified, lockedAssignments = {}) {
         for (const group of candidates) {
             result[slot.matchId] = group;
             used.add(group);
+
             if (backtrack(index + 1)) return true;
+
             used.delete(group);
             delete result[slot.matchId];
         }
@@ -2225,12 +2350,13 @@ function buildThirdAssignments(qualified, lockedAssignments = {}) {
 
     if (backtrack(0)) return result;
 
-    // Fallback defensivo: llena todo lo posible sin repetir terceros.
+    // Respaldo: si alguna combinación no se puede resolver completa, llena lo posible sin repetir.
     THIRD_ASSIGNMENT_SLOTS.forEach(slot => {
         if (result[slot.matchId]) return;
         const candidate = getThirdCandidatesForSlot(slot, qualified)
             .filter(group => !used.has(group))
             .sort((a, b) => (rankedIndex.get(a) ?? 99) - (rankedIndex.get(b) ?? 99))[0];
+
         if (candidate) {
             result[slot.matchId] = candidate;
             used.add(candidate);
@@ -2241,22 +2367,29 @@ function buildThirdAssignments(qualified, lockedAssignments = {}) {
 }
 
 function getSuggestedThirdAssignments(qualified) {
-    const annex = getAnnexCBaseAssignments(qualified);
-    if (Object.keys(annex).length === THIRD_ASSIGNMENT_SLOTS.length) return annex;
-    return buildThirdAssignments(qualified, annex);
+    const official = getAnnexCBaseAssignments(qualified);
+    if (Object.keys(official).length === THIRD_ASSIGNMENT_SLOTS.length) return official;
+
+    return buildThirdAssignments(qualified, official);
 }
 
 function getEffectiveThirdAssignments(qualified) {
-    const officialOrSuggested = getSuggestedThirdAssignments(qualified);
-    const manual = getValidatedManualThirdAssignments(qualified);
-    return buildThirdAssignments(qualified, { ...officialOrSuggested, ...manual });
+    if (!qualified.allGroupsFinished) return {};
+
+    const automaticAssignments = getSuggestedThirdAssignments(qualified);
+    const manualAssignments = getValidatedManualThirdAssignments(qualified);
+
+    return buildThirdAssignments(qualified, {
+        ...automaticAssignments,
+        ...manualAssignments
+    });
 }
 
 function getAvailableThirdOptionsForSlot(qualified, slot) {
     if (!qualified.allGroupsFinished) return [];
 
     const topEight = (qualified.thirdPlaceData || []).slice(0, 8);
-    const current = manualThirdAssignments?.[slot.matchId] || '';
+    const current = getEffectiveThirdAssignments(qualified)[slot.matchId] || manualThirdAssignments?.[slot.matchId] || '';
     const usedByOther = new Set(Object.entries(getEffectiveThirdAssignments(qualified) || {})
         .filter(([id, group]) => id !== slot.matchId && group)
         .map(([, group]) => group));
@@ -2280,7 +2413,7 @@ function renderThirdSelectorInBracket(qualified, slot) {
         return;
     }
 
-    const current = manualThirdAssignments?.[slot.matchId] || '';
+    const current = getEffectiveThirdAssignments(qualified)[slot.matchId] || manualThirdAssignments?.[slot.matchId] || '';
     const options = getAvailableThirdOptionsForSlot(qualified, slot);
     const optionHTML = options.map(team => {
         const data = TEAMS_DATA[team.code] || {};
@@ -2324,39 +2457,49 @@ function renderThirdAssignmentControls(qualified) {
     if (!container) return;
 
     if (!qualified.allGroupsFinished) {
-        container.innerHTML = `<div class="third-confirm-card"><div class="third-assignment-title">Cruces de mejores terceros</div><div class="third-assignment-note">Cuando terminen los 12 grupos, los 8 mejores terceros se colocarán automáticamente en fase eliminatoria.</div></div>`;
+        container.innerHTML = `<div class="third-confirm-card"><div class="third-assignment-title">Confirmación de mejores terceros</div><div class="third-assignment-note">Termina los resultados de los 12 grupos para confirmar los 8 mejores terceros.</div></div>`;
         return;
     }
 
     const topEight = (qualified.thirdPlaceData || []).slice(0, 8);
-    const effective = getEffectiveThirdAssignments(qualified);
+    const signature = getThirdConfirmationSignature(qualified);
+    const confirmed = areThirdsConfirmed(qualified);
     const chips = topEight.map(team => {
         const data = TEAMS_DATA[team.code] || {};
         return `<span class="confirmed-third-chip">3${team.group} · ${escapeHTML(data.flag || '')} ${escapeHTML(data.name || team.code)}</span>`;
     }).join('');
 
-    const usedByOtherSlots = (matchId) => new Set(
-        Object.entries(effective)
-            .filter(([otherMatchId]) => otherMatchId !== matchId)
-            .map(([, group]) => group)
-            .filter(Boolean)
-    );
+    if (!confirmed) {
+        container.innerHTML = `
+            <div class="third-confirm-card">
+                <div class="third-assignment-title">Mejores terceros pendientes</div>
+                <div class="third-assignment-note">Termina los 12 grupos para que se asignen automáticamente los 8 mejores terceros.</div>
+                <div class="confirmed-third-list">${chips}</div>
+                <button class="btn btn-sm third-confirm-btn" type="button" id="third-confirm-btn" ${signature ? '' : 'disabled'}>Confirmar mejores terceros</button>
+            </div>`;
+        return;
+    }
+
+    const effectiveAssignments = getEffectiveThirdAssignments(qualified);
+    const selectedByOther = (matchId) => new Set(Object.entries(effectiveAssignments || {})
+        .filter(([id, group]) => id !== matchId && group)
+        .map(([, group]) => group));
 
     container.innerHTML = `
-        <div class="third-assignment-title">Cruces automáticos de mejores terceros</div>
+        <div class="third-assignment-title">Cruces de mejores terceros</div>
         <div class="third-assignment-note">Los 24 equipos de 1.º y 2.º pasan automático. Los 8 mejores terceros también se colocan en automático; puedes ajustar manualmente cada cruce si lo necesitas.</div>
         <div class="confirmed-third-list">${chips}</div>
         <div class="third-assignment-grid">
             ${THIRD_ASSIGNMENT_SLOTS.map(slot => {
-                const current = effective[slot.matchId] || '';
-                const usedElsewhere = usedByOtherSlots(slot.matchId);
-                const options = getThirdCandidatesForSlot(slot, qualified)
-                    .filter(group => group === current || !usedElsewhere.has(group))
-                    .map(group => {
-                        const code = qualified.thirdByGroup[group];
-                        const data = TEAMS_DATA[code] || {};
-                        return `<option value="${group}" ${group === current ? 'selected' : ''}>3${group} · ${escapeHTML(data.flag || '')} ${escapeHTML(data.name || code)}</option>`;
-                    }).join('');
+                const current = effectiveAssignments[slot.matchId] || manualThirdAssignments[slot.matchId] || '';
+                const blocked = selectedByOther(slot.matchId);
+                const validOptions = topEight.filter(team =>
+                    slot.allowed.includes(team.group) && (!blocked.has(team.group) || team.group === current)
+                );
+                const options = validOptions.map(team => {
+                    const data = TEAMS_DATA[team.code] || {};
+                    return `<option value="${team.group}" ${team.group === current ? 'selected' : ''}>3${team.group} · ${escapeHTML(data.flag || '')} ${escapeHTML(data.name || team.code)}</option>`;
+                }).join('');
                 return `
                     <label class="third-assignment-item">
                         <span>${slot.matchNo} · ${slot.label}</span>
@@ -2369,10 +2512,10 @@ function renderThirdAssignmentControls(qualified) {
         </div>
         <div class="third-assignment-actions">
             <button class="btn btn-sm" type="button" id="third-assignment-reset">Auto cruces</button>
+            <button class="btn btn-sm" type="button" id="third-confirm-reset">Revisar terceros de nuevo</button>
         </div>
     `;
 }
-
 
 function resolveThirdOpponentsFromAnnexC(qualified) {
     applyThirdAssignmentsToBracket(qualified);
