@@ -1842,3 +1842,47 @@ a{ color: inherit; text-decoration: none; }
     font-size: 0.82rem;
   }
 }
+
+
+/* === Corrección de eliminatoria: placeholders y terceros seleccionables === */
+.team-pill.placeholder{
+  min-width: 180px;
+}
+.team-pill.placeholder .placeholder-label{
+  display: block;
+  max-width: 125px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: rgba(255,255,255,0.88);
+  font-weight: 800;
+}
+.team-pill.third-select-pill{
+  grid-template-columns: 1fr;
+  padding: 4px 8px;
+}
+.bracket-third-select{
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  border: 1px solid rgba(0,229,255,.22);
+  border-radius: 12px;
+  background: rgba(7,10,20,.86);
+  color: rgba(255,255,255,.94);
+  font-weight: 800;
+  font-size: .76rem;
+  padding: 0 8px;
+  outline: none;
+}
+.bracket-third-select:focus{
+  border-color: rgba(0,229,255,.55);
+  box-shadow: 0 0 0 3px rgba(0,229,255,.10);
+}
+.bracket-third-select option{
+  background: #101523;
+  color: #fff;
+}
+@media (max-width: 920px){
+  .team-pill.placeholder .placeholder-label{ max-width: 92px; }
+  .bracket-third-select{ font-size: .68rem; }
+}
