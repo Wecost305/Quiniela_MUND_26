@@ -521,44 +521,134 @@ function getBracketRound32DebugSnapshot(qualified) {
     };
 }
 
-function forceVisibleRound32FromQualified(qualified) {
-    // Último candado: si el cálculo existe, la ronda de 32 debe verse aunque el storage
-    // de eliminatoria esté vacío o aunque no existan resultados capturados en eliminatoria.
+const ROUND32_DIRECT_LAYOUT = [
+    { matchId: '16-1',  home: { type: 'second', group: 'A', label: '2º Grupo A' }, away: { type: 'second', group: 'B', label: '2º Grupo B' } },
+    { matchId: '16-2',  home: { type: 'first',  group: 'E', label: '1º Grupo E' }, away: { type: 'third', label: '3º A/B/C/D/F' } },
+    { matchId: '16-3',  home: { type: 'first',  group: 'F', label: '1º Grupo F' }, away: { type: 'second', group: 'C', label: '2º Grupo C' } },
+    { matchId: '16-4',  home: { type: 'first',  group: 'C', label: '1º Grupo C' }, away: { type: 'second', group: 'F', label: '2º Grupo F' } },
+    { matchId: '16-5',  home: { type: 'first',  group: 'I', label: '1º Grupo I' }, away: { type: 'third', label: '3º C/D/F/G/H' } },
+    { matchId: '16-6',  home: { type: 'second', group: 'E', label: '2º Grupo E' }, away: { type: 'second', group: 'I', label: '2º Grupo I' } },
+    { matchId: '16-7',  home: { type: 'first',  group: 'A', label: '1º Grupo A' }, away: { type: 'third', label: '3º C/E/F/H/I' } },
+    { matchId: '16-8',  home: { type: 'first',  group: 'L', label: '1º Grupo L' }, away: { type: 'third', label: '3º E/H/I/J/K' } },
+    { matchId: '16-9',  home: { type: 'first',  group: 'D', label: '1º Grupo D' }, away: { type: 'third', label: '3º B/E/F/I/J' } },
+    { matchId: '16-10', home: { type: 'first',  group: 'G', label: '1º Grupo G' }, away: { type: 'third', label: '3º A/E/H/I/J' } },
+    { matchId: '16-11', home: { type: 'second', group: 'K', label: '2º Grupo K' }, away: { type: 'second', group: 'L', label: '2º Grupo L' } },
+    { matchId: '16-12', home: { type: 'first',  group: 'H', label: '1º Grupo H' }, away: { type: 'second', group: 'J', label: '2º Grupo J' } },
+    { matchId: '16-13', home: { type: 'first',  group: 'B', label: '1º Grupo B' }, away: { type: 'third', label: '3º E/F/G/I/J' } },
+    { matchId: '16-14', home: { type: 'first',  group: 'J', label: '1º Grupo J' }, away: { type: 'second', group: 'H', label: '2º Grupo H' } },
+    { matchId: '16-15', home: { type: 'first',  group: 'K', label: '1º Grupo K' }, away: { type: 'third', label: '3º D/E/I/J/L' } },
+    { matchId: '16-16', home: { type: 'second', group: 'D', label: '2º Grupo D' }, away: { type: 'second', group: 'G', label: '2º Grupo G' } }
+];
+
+function getRound32SlotCode(def, matchId, qualified, assignments) {
+    if (!def || !qualified) return null;
+    if (def.type === 'first') return qualified.first?.[def.group] || null;
+    if (def.type === 'second') return qualified.second?.[def.group] || null;
+    if (def.type === 'third') {
+        const thirdGroup = assignments?.[matchId];
+        return thirdGroup ? (qualified.thirdByGroup?.[thirdGroup] || null) : null;
+    }
+    return null;
+}
+
+function paintBracketPillHard(matchEl, position, teamCode, placeholderLabel, previous) {
+    const pill = matchEl.querySelector(`.team-pill[data-team-pos="${position}"]`);
+    if (!pill) return;
+
+    const previousScore = previous?.[position]?.code === teamCode ? previous[position].score : '';
+
+    pill.classList.remove('loser');
+
+    if (teamCode && TEAMS_DATA[teamCode]) {
+        pill.classList.remove('placeholder');
+        pill.dataset.teamCode = teamCode;
+        pill.innerHTML = `<span class="flag">${escapeHTML(TEAMS_DATA[teamCode].flag)}</span><span class="code" title="${escapeHTML(TEAMS_DATA[teamCode].name)}">${escapeHTML(TEAMS_DATA[teamCode].name)}</span>`;
+        if (previousScore !== '') pill.dataset.pendingScore = previousScore;
+    } else {
+        pill.classList.add('placeholder');
+        delete pill.dataset.teamCode;
+        delete pill.dataset.pendingScore;
+        pill.innerHTML = `<span class="flag">⏳</span><span class="code placeholder-label" title="${escapeHTML(placeholderLabel)}">${escapeHTML(placeholderLabel)}</span>`;
+    }
+}
+
+function ensureScoreInputsForPaintedMatch(matchEl) {
+    const homePill = matchEl.querySelector('.team-pill[data-team-pos="home"]');
+    const awayPill = matchEl.querySelector('.team-pill[data-team-pos="away"]');
+    if (!homePill || !awayPill) return;
+
+    if (homePill.dataset.teamCode && awayPill.dataset.teamCode) {
+        [homePill, awayPill].forEach(pill => {
+            let score = pill.querySelector('.score');
+            if (!score) {
+                score = document.createElement('input');
+                score.type = 'number';
+                score.min = '0';
+                score.max = '20';
+                score.step = '1';
+                score.inputMode = 'numeric';
+                score.className = 'score';
+                pill.appendChild(score);
+            }
+            if (pill.dataset.pendingScore !== undefined) {
+                score.value = pill.dataset.pendingScore;
+                delete pill.dataset.pendingScore;
+            }
+        });
+    }
+}
+
+function repaintRound32Directly(qualified) {
     if (!qualified) return;
 
-    const fixedSlots = [
-        ['16-1', 'home', qualified.second?.A, '2º Grupo A'],
-        ['16-1', 'away', qualified.second?.B, '2º Grupo B'],
-        ['16-3', 'home', qualified.first?.F, '1º Grupo F'],
-        ['16-3', 'away', qualified.second?.C, '2º Grupo C'],
-        ['16-4', 'home', qualified.first?.C, '1º Grupo C'],
-        ['16-4', 'away', qualified.second?.F, '2º Grupo F'],
-        ['16-6', 'home', qualified.second?.E, '2º Grupo E'],
-        ['16-6', 'away', qualified.second?.I, '2º Grupo I'],
-        ['16-11', 'home', qualified.second?.K, '2º Grupo K'],
-        ['16-11', 'away', qualified.second?.L, '2º Grupo L'],
-        ['16-12', 'home', qualified.first?.H, '1º Grupo H'],
-        ['16-12', 'away', qualified.second?.J, '2º Grupo J'],
-        ['16-14', 'home', qualified.first?.J, '1º Grupo J'],
-        ['16-14', 'away', qualified.second?.H, '2º Grupo H'],
-        ['16-16', 'home', qualified.second?.D, '2º Grupo D'],
-        ['16-16', 'away', qualified.second?.G, '2º Grupo G']
-    ];
+    const assignments = qualified?.allGroupsFinished ? getEffectiveThirdAssignments(qualified) : {};
 
-    fixedSlots.forEach(([matchId, position, code, label]) => {
-        if (code) updateNextMatch(matchId, position, code);
-        else setBracketPlaceholder(matchId, position, label);
+    ROUND32_DIRECT_LAYOUT.forEach(item => {
+        const matchEl = document.querySelector(`#bracket-container .match-container[data-match-id="${item.matchId}"]`);
+        if (!matchEl) return;
+
+        const previous = {};
+        ['home', 'away'].forEach(pos => {
+            const pill = matchEl.querySelector(`.team-pill[data-team-pos="${pos}"]`);
+            previous[pos] = {
+                code: pill?.dataset?.teamCode || '',
+                score: pill?.querySelector?.('.score')?.value ?? ''
+            };
+        });
+
+        const homeCode = getRound32SlotCode(item.home, item.matchId, qualified, assignments);
+        const awayCode = getRound32SlotCode(item.away, item.matchId, qualified, assignments);
+
+        paintBracketPillHard(matchEl, 'home', homeCode, item.home.label, previous);
+        paintBracketPillHard(matchEl, 'away', awayCode, item.away.label, previous);
+        ensureScoreInputsForPaintedMatch(matchEl);
     });
 
-    THIRD_ASSIGNMENT_SLOTS.forEach(slot => {
-        const homeCode = qualified.first?.[slot.winnerGroup];
-        if (homeCode) updateNextMatch(slot.matchId, 'home', homeCode);
-        else setBracketPlaceholder(slot.matchId, 'home', `1º Grupo ${slot.winnerGroup}`);
-    });
-
-    applyThirdAssignmentsToBracket(qualified);
     ensureBracketPillFallbackLabels();
+}
+
+function getRound32DomDebugSnapshot() {
+    return ROUND32_DIRECT_LAYOUT.map(item => {
+        const matchEl = document.querySelector(`#bracket-container .match-container[data-match-id="${item.matchId}"]`);
+        const home = matchEl?.querySelector?.('.team-pill[data-team-pos="home"]');
+        const away = matchEl?.querySelector?.('.team-pill[data-team-pos="away"]');
+        return `${item.matchId}: H=${home?.dataset?.teamCode || (home?.textContent || '').trim() || 'VACIO'} | A=${away?.dataset?.teamCode || (away?.textContent || '').trim() || 'VACIO'}`;
+    });
+}
+
+function forceVisibleRound32FromQualified(qualified) {
+    // Pintado fuerte: no dependemos del estado guardado de eliminatoria ni de selectores de terceros.
+    // La ronda de 32 se reescribe directo desde las tablas de grupos ya calculadas.
+    if (!qualified) return;
+
+    repaintRound32Directly(qualified);
+
+    // Repetimos en el siguiente frame por si otro proceso del navegador reacomoda el bracket al cargar.
+    window.requestAnimationFrame(() => repaintRound32Directly(qualified));
+    setTimeout(() => repaintRound32Directly(qualified), 80);
+
     window.__QM2026_LAST_BRACKET_SNAPSHOT__ = getBracketRound32DebugSnapshot(qualified);
+    window.__QM2026_LAST_BRACKET_DOM__ = getRound32DomDebugSnapshot();
 }
 
 function syncThirdConfirmationWithQualified(qualified) {
@@ -2714,6 +2804,7 @@ function showFixtureDebugPanel(savedState) {
         }
 
         const snap = window.__QM2026_LAST_BRACKET_SNAPSHOT__;
+        const domSnap = window.__QM2026_LAST_BRACKET_DOM__;
         const snapText = snap ? [
             '',
             'snapshot eliminatoria calculada:',
@@ -2721,7 +2812,10 @@ function showFixtureDebugPanel(savedState) {
             `primeros: ${JSON.stringify(snap.first)}`,
             `segundos: ${JSON.stringify(snap.second)}`,
             `terceros top8: ${(snap.thirdGroups || []).join(',')}`,
-            `cruces terceros: ${JSON.stringify(snap.thirdAssignments || {})}`
+            `cruces terceros: ${JSON.stringify(snap.thirdAssignments || {})}`,
+            '',
+            'snapshot DOM ronda 32:',
+            Array.isArray(domSnap) && domSnap.length ? domSnap.join('\n') : '(sin lectura DOM todavía)'
         ].join('\n') : '';
 
         box.textContent = [
