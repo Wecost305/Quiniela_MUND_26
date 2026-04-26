@@ -21,8 +21,8 @@ let confirmedThirdSignature = null;
 let userPredictions = {};
 
 
-// Diagnóstico visual mínimo: solo aparece si hay un error real de JavaScript.
-// Ayuda a identificar problemas sin abrir herramientas del navegador.
+// Diagnóstico mínimo del fixture.
+// Normalmente no se muestra. Si abres la página con ?debug=1 muestra la llave local y conteos.
 (function initFixtureDiagnostics() {
     if (typeof window === 'undefined' || window.__QM2026_DIAGNOSTICS_INSTALLED__) return;
     window.__QM2026_DIAGNOSTICS_INSTALLED__ = true;
@@ -60,10 +60,8 @@ let userPredictions = {};
                 ].join(';');
                 document.body.appendChild(box);
             }
-            box.textContent = `Error detectado en fase eliminatoria:\n${cleanMessage}\n${source || ''}${line ? ':' + line : ''}${column ? ':' + column : ''}\n\nTambién queda registrado en consola y en window.__QM2026_ERRORS__.`;
-        } catch (e) {
-            // Si aún no existe document.body, el error queda en consola.
-        }
+            box.textContent = `Error detectado:\n${cleanMessage}\n${source || ''}${line ? ':' + line : ''}${column ? ':' + column : ''}`;
+        } catch (e) {}
     }
 
     window.addEventListener('error', function (event) {
@@ -76,7 +74,6 @@ let userPredictions = {};
         showFixtureError(message || 'Promesa rechazada sin detalle');
     });
 })();
-
 
 
 // Calendario mostrado en hora local de Ciudad de México (CDMX).
@@ -462,7 +459,6 @@ const THIRD_ASSIGNMENT_SLOTS = [
     { matchId: '16-13', matchNo: 'M85', winnerGroup: 'B', label: '1B vs 3º E/F/G/I/J', allowed: ['E','F','G','I','J'] },
     { matchId: '16-15', matchNo: 'M87', winnerGroup: 'K', label: '1K vs 3º D/E/I/J/L', allowed: ['D','E','I','J','L'] }
 ];
-
 
 const BRACKET_FALLBACK_LABELS = {
     '16-1':  { home: '2º Grupo A', away: '2º Grupo B' },
@@ -1139,6 +1135,7 @@ function initApp() {
     generateGroupsHTML();
     hideSplash(6000);
     generateBracketHTML();
+    ensureBracketPillFallbackLabels();
     initializeEventListeners();
 
     startSaveTicker();
@@ -1151,7 +1148,7 @@ function initApp() {
     startUpcomingAgendaTicker();
 
     // Verificamos si el usuario ya tiene un nombre guardado
-    const savedState = JSON.parse(localStorage.getItem(storageKey));
+    const savedState = resolveSavedStateForCurrentUser();
     if (savedState && savedState.userName) {
         document.getElementById('user-name-display').textContent = `Quiniela de: ${savedState.userName}`;
     } else {
@@ -2239,7 +2236,6 @@ const ANNEX_C_MAP = {
     'EFGHIJKL': { A: 'E', B: 'J', D: 'I', E: 'F', G: 'H', I: 'G', K: 'L', L: 'K' }
 };
 
-
 function getQualifiedThirdGroups(qualified) {
     return (qualified.thirdPlaceData || [])
         .slice(0, 8)
@@ -2563,6 +2559,137 @@ function validateMatchInputs(matchRow) {
 }
 
 // --- LÓGICA DE ALMACENAMIENTO ---
+function safeParseStorageState(raw) {
+    if (!raw) return null;
+    try {
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+function countStoredScores(savedState) {
+    if (!savedState || typeof savedState !== 'object') return 0;
+    let total = 0;
+
+    Object.values(savedState.groups || {}).forEach(group => {
+        Object.values(group || {}).forEach(scores => {
+            if (Array.isArray(scores) && (scores[0] !== '' || scores[1] !== '')) total += 1;
+        });
+    });
+
+    Object.values(savedState.bracket || {}).forEach(scores => {
+        if (Array.isArray(scores) && (scores[0] !== '' || scores[1] !== '')) total += 1;
+    });
+
+    if (savedState.userName) total += 0.25;
+    if (savedState.manual?.groupOrders && Object.keys(savedState.manual.groupOrders).length) total += 0.1;
+    if (savedState.predictions && Object.keys(savedState.predictions).length) total += 0.1;
+    return total;
+}
+
+function getQuinielaStorageCandidates() {
+    const preferredKeys = [
+        storageKey,
+        'quinielaMundial2026_data_v2',
+        'quinielaMundial2026_data'
+    ];
+
+    try {
+        for (let i = 0; i < localStorage.length; i += 1) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('quinielaMundial2026_') && !preferredKeys.includes(key)) {
+                preferredKeys.push(key);
+            }
+        }
+    } catch (e) {}
+
+    return preferredKeys
+        .map(key => ({ key, state: safeParseStorageState(localStorage.getItem(key)) }))
+        .filter(item => item.state)
+        .map(item => ({ ...item, scoreCount: countStoredScores(item.state) }))
+        .sort((a, b) => b.scoreCount - a.scoreCount);
+}
+
+function resolveSavedStateForCurrentUser() {
+    const current = safeParseStorageState(localStorage.getItem(storageKey));
+    const currentScore = countStoredScores(current);
+    const candidates = getQuinielaStorageCandidates();
+    const best = candidates[0] || null;
+
+    // Si la llave actual está vacía y existe una quiniela local anterior, la copiamos a la llave del token actual.
+    // Esto corrige el caso típico después del cambio de TOKEN: el navegador tenía datos en una llave vieja.
+    if ((!current || currentScore === 0) && best && best.key !== storageKey && best.scoreCount > 0) {
+        try {
+            localStorage.setItem(storageKey, JSON.stringify(best.state));
+            window.__QM2026_STORAGE_MIGRATION__ = { from: best.key, to: storageKey, scoreCount: best.scoreCount };
+        } catch (e) {}
+        return best.state;
+    }
+
+    return current;
+}
+
+function shouldShowFixtureDebug() {
+    try {
+        const params = new URLSearchParams(window.location.search);
+        return params.has('debug') || params.has('qmdebug');
+    } catch (e) {
+        return false;
+    }
+}
+
+function showFixtureDebugPanel(savedState) {
+    if (!shouldShowFixtureDebug()) return;
+
+    try {
+        const groupsSaved = Object.keys(savedState?.groups || {}).length;
+        const bracketSaved = Object.keys(savedState?.bracket || {}).length;
+        const scoreCount = countStoredScores(savedState);
+        const allKeys = getQuinielaStorageCandidates()
+            .map(item => `${item.key}: ${item.scoreCount}`)
+            .join('\n');
+
+        let box = document.getElementById('qm2026-debug-box');
+        if (!box) {
+            box = document.createElement('div');
+            box.id = 'qm2026-debug-box';
+            box.style.cssText = [
+                'position:fixed',
+                'left:12px',
+                'right:12px',
+                'top:12px',
+                'z-index:999998',
+                'background:rgba(0,25,35,.94)',
+                'color:#eaffff',
+                'border:1px solid rgba(255,255,255,.25)',
+                'border-radius:10px',
+                'padding:10px 12px',
+                'font:12px/1.35 monospace',
+                'box-shadow:0 10px 35px rgba(0,0,0,.45)',
+                'white-space:pre-wrap',
+                'max-height:45vh',
+                'overflow:auto'
+            ].join(';');
+            document.body.appendChild(box);
+        }
+
+        box.textContent = [
+            'DEBUG QUINIELA MUNDIAL 2026',
+            `storageKey actual: ${storageKey}`,
+            `currentUserId: ${currentUserId || '(sin usuario)'}`,
+            `partidos guardados: ${scoreCount}`,
+            `grupos con datos: ${groupsSaved}`,
+            `partidos eliminatoria guardados: ${bracketSaved}`,
+            window.__QM2026_STORAGE_MIGRATION__ ? `migración: ${window.__QM2026_STORAGE_MIGRATION__.from} -> ${window.__QM2026_STORAGE_MIGRATION__.to}` : 'migración: no aplicada',
+            '',
+            'llaves locales detectadas:',
+            allKeys || '(ninguna)'
+        ].join('\n');
+    } catch (e) {}
+}
+
 function saveStateToStorage() {
     // Si estamos en medio de la carga inicial, no guardamos nada para evitar sobrescribir.
     if (isLoading) return;
@@ -2627,7 +2754,8 @@ function saveStateToStorage() {
 function loadStateFromStorage() {
     isLoading = true; // --- Activamos la bandera de carga ---
 
-    const savedState = JSON.parse(localStorage.getItem(storageKey));
+    const savedState = resolveSavedStateForCurrentUser();
+    showFixtureDebugPanel(savedState);
 
     manualGroupOrders = savedState?.manual?.groupOrders || {};
     manualThirdOrder = savedState?.manual?.thirdOrder || [];
