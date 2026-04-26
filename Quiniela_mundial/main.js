@@ -195,111 +195,6 @@ function renderGroupMatchMeta(groupId, matchIndex) {
         </div>`;
 }
 
-
-function parseCdmxDateTime(item) {
-    if (!item || !item.date || !item.time) return null;
-    const months = {
-        enero: 0, febrero: 1, marzo: 2, abril: 3, mayo: 4, junio: 5,
-        julio: 6, agosto: 7, septiembre: 8, octubre: 9, noviembre: 10, diciembre: 11
-    };
-    const d = String(item.date).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    const m = d.match(/(\d{1,2})\s+([a-z]+)\s+(\d{4})/);
-    const t = String(item.time).match(/(\d{1,2}):(\d{2})/);
-    if (!m || !t) return null;
-    const day = Number(m[1]);
-    const month = months[m[2]];
-    const year = Number(m[3]);
-    const hour = Number(t[1]);
-    const minute = Number(t[2]);
-    if (month === undefined) return null;
-    return new Date(Date.UTC(year, month, day, hour + 6, minute, 0));
-}
-
-function getGroupMatchTeams(groupId, matchIndex) {
-    const group = groupsData.find(g => g.id === groupId);
-    if (!group) return { home: 'Por definir', away: 'Por definir' };
-    const pairs = [[0, 1], [2, 3], [0, 2], [1, 3], [0, 3], [1, 2]];
-    const pair = pairs[matchIndex] || [0, 1];
-    return { home: getTeamDisplayName(group.codes[pair[0]]), away: getTeamDisplayName(group.codes[pair[1]]) };
-}
-
-function getBracketSlotText(matchId, pos) {
-    const pill = document.querySelector(`[data-match-id="${matchId}"] .team-pill[data-team-pos="${pos}"]`);
-    const txt = (pill?.querySelector('.code')?.textContent || pill?.textContent || '').trim();
-    if (txt) return txt;
-    return BRACKET_FALLBACK_LABELS?.[matchId]?.[pos] || 'Por definir';
-}
-
-function getScheduledMatches() {
-    const schedule = getScheduleData();
-    const matches = [];
-    Object.entries(schedule.groups || {}).forEach(([groupId, items]) => {
-        (items || []).forEach((item, index) => {
-            const start = parseCdmxDateTime(item);
-            if (!start) return;
-            const teams = getGroupMatchTeams(groupId, index);
-            matches.push({ id: `G${groupId}-${index}`, no: item.no, phase: `Grupo ${groupId}`, home: teams.home, away: teams.away, date: item.date, time: item.time, venue: item.venue, city: item.city, start });
-        });
-    });
-    Object.entries(schedule.bracket || {}).forEach(([matchId, item]) => {
-        const start = parseCdmxDateTime(item);
-        if (!start) return;
-        matches.push({
-            id: matchId,
-            no: item.no,
-            phase: matchId.startsWith('16-') ? 'Dieciseisavos' : matchId.startsWith('8-') ? 'Octavos' : matchId.startsWith('4-') ? 'Cuartos' : matchId.startsWith('2-') ? 'Semifinal' : matchId === '3-1' ? 'Tercer lugar' : 'Final',
-            home: getBracketSlotText(matchId, 'home'),
-            away: getBracketSlotText(matchId, 'away'),
-            date: item.date,
-            time: item.time,
-            venue: item.venue,
-            city: item.city,
-            start
-        });
-    });
-    return matches.sort((a, b) => a.start - b.start || Number(a.no || 0) - Number(b.no || 0));
-}
-
-function formatRemaining(ms) {
-    if (ms <= 0) return 'En juego o por iniciar';
-    const minutes = Math.floor(ms / 60000);
-    const days = Math.floor(minutes / 1440);
-    const hours = Math.floor((minutes % 1440) / 60);
-    const mins = minutes % 60;
-    if (days > 0) return `Faltan ${days} d ${hours} h`;
-    if (hours > 0) return `Faltan ${hours} h ${mins} min`;
-    return `Faltan ${mins} min`;
-}
-
-function renderUpcomingAgenda() {
-    const nowEl = document.getElementById('upcoming-now');
-    const summaryEl = document.getElementById('upcoming-summary');
-    const listEl = document.getElementById('upcoming-list');
-    if (!summaryEl || !listEl) return;
-    const now = new Date();
-    if (nowEl) nowEl.textContent = `Hora CDMX — ${now.toLocaleString('es-MX', { timeZone: 'America/Mexico_City', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}`;
-    const matches = getScheduledMatches();
-    const upcoming = matches.filter(m => (m.start.getTime() + 2 * 60 * 60 * 1000) >= now.getTime()).slice(0, 5);
-    if (!matches.length) { summaryEl.textContent = 'No se encontró calendario cargado.'; listEl.innerHTML = ''; return; }
-    if (!upcoming.length) { summaryEl.textContent = 'El calendario del torneo ya terminó.'; listEl.innerHTML = ''; return; }
-    const first = upcoming[0];
-    summaryEl.innerHTML = `<strong>M${first.no}</strong> · ${escapeHTML(first.phase)} · ${escapeHTML(first.home)} vs ${escapeHTML(first.away)}<br><span>${escapeHTML(first.date)} · ${escapeHTML(first.time)} · ${escapeHTML(first.venue)} · ${escapeHTML(first.city)}</span><br><em>${formatRemaining(first.start.getTime() - now.getTime())}</em>`;
-    listEl.innerHTML = upcoming.map(m => `
-        <div class="upcoming-card">
-            <div class="upcoming-card__top"><span>M${escapeHTML(String(m.no))}</span><span>${escapeHTML(m.phase)}</span></div>
-            <div class="upcoming-card__teams">${escapeHTML(m.home)} <span>vs</span> ${escapeHTML(m.away)}</div>
-            <div class="upcoming-card__meta">${escapeHTML(m.date)} · ${escapeHTML(m.time)}</div>
-            <div class="upcoming-card__meta">${escapeHTML(m.venue)} · ${escapeHTML(m.city)}</div>
-        </div>`).join('');
-}
-
-let upcomingAgendaTimer = null;
-function startUpcomingAgenda() {
-    renderUpcomingAgenda();
-    if (upcomingAgendaTimer) clearInterval(upcomingAgendaTimer);
-    upcomingAgendaTimer = setInterval(renderUpcomingAgenda, 60000);
-}
-
 function renderTeamName(code, side) {
     const name = getTeamDisplayName(code);
     const flag = getTeamFlag(code);
@@ -320,6 +215,185 @@ function renderTeamName(code, side) {
     </span>`;
 }
 
+
+let upcomingAgendaTimer = null;
+
+function parseScheduleDateToUTC(item) {
+    if (!item?.date || !item?.time) return null;
+
+    const months = {
+        enero: 0, febrero: 1, marzo: 2, abril: 3, mayo: 4, junio: 5,
+        julio: 6, agosto: 7, septiembre: 8, setiembre: 8, octubre: 9,
+        noviembre: 10, diciembre: 11
+    };
+
+    const dateMatch = String(item.date).match(/(\d{1,2})\s+([A-Za-záéíóúñ]+)\s+(\d{4})/i);
+    const timeMatch = String(item.time).match(/(\d{1,2}):(\d{2})/);
+    if (!dateMatch || !timeMatch) return null;
+
+    const day = Number(dateMatch[1]);
+    const monthName = dateMatch[2].toLowerCase();
+    const year = Number(dateMatch[3]);
+    const month = months[monthName];
+    const hour = Number(timeMatch[1]);
+    const minute = Number(timeMatch[2]);
+
+    if (Number.isNaN(day) || Number.isNaN(year) || Number.isNaN(hour) || Number.isNaN(minute) || month === undefined) {
+        return null;
+    }
+
+    return new Date(Date.UTC(year, month, day, hour + 6, minute));
+}
+
+function formatAgendaNow() {
+    return new Intl.DateTimeFormat('es-MX', {
+        timeZone: 'America/Mexico_City',
+        day: 'numeric',
+        month: 'short',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+    }).format(new Date()).replace(',', '');
+}
+
+function formatCountdown(targetDate) {
+    if (!(targetDate instanceof Date) || Number.isNaN(targetDate.getTime())) return '';
+    const diff = targetDate.getTime() - Date.now();
+    if (diff <= 0) return 'Está por iniciar o ya comenzó';
+
+    const totalMinutes = Math.floor(diff / 60000);
+    const days = Math.floor(totalMinutes / (60 * 24));
+    const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+    const minutes = totalMinutes % 60;
+
+    if (days > 0) return `Faltan ${days} d ${hours} h`;
+    if (hours > 0) return `Faltan ${hours} h ${minutes} min`;
+    return `Faltan ${minutes} min`;
+}
+
+function getGroupMatchScheduleEntries() {
+    const schedule = getScheduleData();
+    const pairings = [[0, 1], [2, 3], [0, 2], [1, 3], [0, 3], [1, 2]];
+
+    return groupsData.flatMap(group => {
+        return pairings.map(([i, j], matchIndex) => {
+            const item = schedule?.groups?.[group.id]?.[matchIndex];
+            const homeCode = group.codes[i];
+            const awayCode = group.codes[j];
+            const matchId = getGroupPredictionMatchId(group.id, matchIndex);
+            return {
+                matchId,
+                groupId: group.id,
+                matchNo: item?.no ? `M${item.no}` : `M${matchIndex + 1}`,
+                homeCode,
+                awayCode,
+                homeName: getTeamDisplayName(homeCode),
+                awayName: getTeamDisplayName(awayCode),
+                homeFlag: getTeamFlag(homeCode),
+                awayFlag: getTeamFlag(awayCode),
+                dateText: item?.date || '',
+                timeText: item?.time || '',
+                venue: item?.venue || '',
+                city: item?.city || '',
+                startsAt: parseScheduleDateToUTC(item)
+            };
+        });
+    }).sort((a, b) => {
+        const aTime = a.startsAt ? a.startsAt.getTime() : Number.MAX_SAFE_INTEGER;
+        const bTime = b.startsAt ? b.startsAt.getTime() : Number.MAX_SAFE_INTEGER;
+        return aTime - bTime;
+    });
+}
+
+function isGroupMatchCompleteById(matchId) {
+    const matchEl = document.querySelector(`.match-grid[data-match-id="${matchId}"]`);
+    if (!matchEl) return false;
+    const inputs = [...matchEl.querySelectorAll('.score-input')];
+    return inputs.length === 2 && inputs.every(input => input.value !== '');
+}
+
+function getUpcomingMatches(limit = 5) {
+    return getGroupMatchScheduleEntries()
+        .filter(entry => !isGroupMatchCompleteById(entry.matchId))
+        .slice(0, limit);
+}
+
+function renderUpcomingPanel() {
+    const nowEl = document.getElementById('upcoming-now');
+    const summaryEl = document.getElementById('upcoming-summary');
+    const listEl = document.getElementById('upcoming-list');
+    if (!nowEl || !summaryEl || !listEl) return;
+
+    nowEl.innerHTML = `<span class="upcoming-now__label">Hora CDMX</span><strong>${escapeHTML(formatAgendaNow())}</strong>`;
+
+    const matches = getUpcomingMatches(5);
+    if (!matches.length) {
+        summaryEl.innerHTML = `
+            <div class="upcoming-featured upcoming-featured--done">
+                <div class="upcoming-featured__main">
+                    <span class="upcoming-featured__tag">Agenda completa</span>
+                    <h3>Ya no hay partidos pendientes en fase de grupos</h3>
+                    <p>Todos los encuentros programados de grupos ya tienen marcador capturado.</p>
+                </div>
+            </div>`;
+        listEl.innerHTML = '';
+        return;
+    }
+
+    const [nextMatch, ...otherMatches] = matches;
+    const placeText = [nextMatch.venue, nextMatch.city].filter(Boolean).join(' · ');
+    const dateTimeText = [nextMatch.dateText, nextMatch.timeText].filter(Boolean).join(' · ');
+
+    summaryEl.innerHTML = `
+        <article class="upcoming-featured">
+            <div class="upcoming-featured__main">
+                <div class="upcoming-featured__eyebrow">
+                    <span class="upcoming-match-badge">${escapeHTML(nextMatch.matchNo)}</span>
+                    <span class="upcoming-group-pill">Grupo ${escapeHTML(nextMatch.groupId)}</span>
+                </div>
+                <h3 class="upcoming-featured__headline">Próximo partido por jugar</h3>
+                <div class="upcoming-featured__teams">
+                    <span class="upcoming-team upcoming-team--home"><span class="upcoming-team__flag">${escapeHTML(nextMatch.homeFlag)}</span><span>${escapeHTML(nextMatch.homeName)}</span></span>
+                    <span class="upcoming-featured__vs">vs</span>
+                    <span class="upcoming-team upcoming-team--away"><span class="upcoming-team__flag">${escapeHTML(nextMatch.awayFlag)}</span><span>${escapeHTML(nextMatch.awayName)}</span></span>
+                </div>
+                <div class="upcoming-featured__meta">
+                    <span>${escapeHTML(dateTimeText)}</span>
+                    ${placeText ? `<span>${escapeHTML(placeText)}</span>` : ''}
+                </div>
+            </div>
+            <div class="upcoming-featured__side">
+                <div class="upcoming-countdown">${escapeHTML(formatCountdown(nextMatch.startsAt))}</div>
+                <div class="upcoming-side-note">Se actualiza conforme capturas resultados.</div>
+            </div>
+        </article>`;
+
+    listEl.innerHTML = otherMatches.map(match => {
+        const compactDate = [match.dateText, match.timeText].filter(Boolean).join(' · ');
+        const compactPlace = [match.venue, match.city].filter(Boolean).join(' · ');
+        return `
+            <article class="upcoming-card">
+                <div class="upcoming-card__top">
+                    <span class="upcoming-match-badge">${escapeHTML(match.matchNo)}</span>
+                    <span class="upcoming-group-pill">Grupo ${escapeHTML(match.groupId)}</span>
+                </div>
+                <div class="upcoming-card__teams">
+                    <div class="upcoming-card__team"><span class="upcoming-team__flag">${escapeHTML(match.homeFlag)}</span><span>${escapeHTML(match.homeName)}</span></div>
+                    <div class="upcoming-card__vs">vs</div>
+                    <div class="upcoming-card__team"><span class="upcoming-team__flag">${escapeHTML(match.awayFlag)}</span><span>${escapeHTML(match.awayName)}</span></div>
+                </div>
+                <div class="upcoming-card__meta">${escapeHTML(compactDate)}</div>
+                <div class="upcoming-card__meta upcoming-card__meta--secondary">${escapeHTML(compactPlace)}</div>
+            </article>`;
+    }).join('');
+}
+
+function startUpcomingAgendaTicker() {
+    renderUpcomingPanel();
+    if (upcomingAgendaTimer) clearInterval(upcomingAgendaTimer);
+    upcomingAgendaTimer = setInterval(renderUpcomingPanel, 60000);
+}
+
 const THIRD_ASSIGNMENT_SLOTS = [
     { matchId: '16-2',  matchNo: 'M74', winnerGroup: 'E', label: '1E vs 3º A/B/C/D/F', allowed: ['A','B','C','D','F'] },
     { matchId: '16-5',  matchNo: 'M77', winnerGroup: 'I', label: '1I vs 3º C/D/F/G/H', allowed: ['C','D','F','G','H'] },
@@ -330,55 +404,6 @@ const THIRD_ASSIGNMENT_SLOTS = [
     { matchId: '16-13', matchNo: 'M85', winnerGroup: 'B', label: '1B vs 3º E/F/G/I/J', allowed: ['E','F','G','I','J'] },
     { matchId: '16-15', matchNo: 'M87', winnerGroup: 'K', label: '1K vs 3º D/E/I/J/L', allowed: ['D','E','I','J','L'] }
 ];
-
-
-const BRACKET_FALLBACK_LABELS = {
-    '16-1':  { home: '2º Grupo A', away: '2º Grupo B' },
-    '16-2':  { home: '1º Grupo E', away: '3º A/B/C/D/F' },
-    '16-3':  { home: '1º Grupo F', away: '2º Grupo C' },
-    '16-4':  { home: '1º Grupo C', away: '2º Grupo F' },
-    '16-5':  { home: '1º Grupo I', away: '3º C/D/F/G/H' },
-    '16-6':  { home: '2º Grupo E', away: '2º Grupo I' },
-    '16-7':  { home: '1º Grupo A', away: '3º C/E/F/H/I' },
-    '16-8':  { home: '1º Grupo L', away: '3º E/H/I/J/K' },
-    '16-9':  { home: '1º Grupo D', away: '3º B/E/F/I/J' },
-    '16-10': { home: '1º Grupo G', away: '3º A/E/H/I/J' },
-    '16-11': { home: '2º Grupo K', away: '2º Grupo L' },
-    '16-12': { home: '1º Grupo H', away: '2º Grupo J' },
-    '16-13': { home: '1º Grupo B', away: '3º E/F/G/I/J' },
-    '16-14': { home: '1º Grupo J', away: '2º Grupo H' },
-    '16-15': { home: '1º Grupo K', away: '3º D/E/I/J/L' },
-    '16-16': { home: '2º Grupo D', away: '2º Grupo G' },
-    '8-1':   { home: 'Ganador M73',  away: 'Ganador M74' },
-    '8-2':   { home: 'Ganador M75',  away: 'Ganador M76' },
-    '8-3':   { home: 'Ganador M77',  away: 'Ganador M78' },
-    '8-4':   { home: 'Ganador M79',  away: 'Ganador M80' },
-    '8-5':   { home: 'Ganador M81',  away: 'Ganador M82' },
-    '8-6':   { home: 'Ganador M83',  away: 'Ganador M84' },
-    '8-7':   { home: 'Ganador M85',  away: 'Ganador M86' },
-    '8-8':   { home: 'Ganador M87',  away: 'Ganador M88' },
-    '4-1':   { home: 'Ganador M89',  away: 'Ganador M90' },
-    '4-2':   { home: 'Ganador M91',  away: 'Ganador M92' },
-    '4-3':   { home: 'Ganador M93',  away: 'Ganador M94' },
-    '4-4':   { home: 'Ganador M95',  away: 'Ganador M96' },
-    '2-1':   { home: 'Ganador M97',  away: 'Ganador M98' },
-    '2-2':   { home: 'Ganador M99',  away: 'Ganador M100' },
-    '1-1':   { home: 'Ganador M101', away: 'Ganador M102' },
-    '3-1':   { home: 'Perdedor M101', away: 'Perdedor M102' }
-};
-
-function ensureBracketPillFallbackLabels() {
-    Object.entries(BRACKET_FALLBACK_LABELS).forEach(([matchId, slots]) => {
-        const matchEl = document.querySelector(`[data-match-id="${matchId}"]`);
-        if (!matchEl) return;
-        Object.entries(slots).forEach(([pos, label]) => {
-            const pill = matchEl.querySelector(`.team-pill[data-team-pos="${pos}"]`);
-            if (!pill || pill.dataset.teamCode || pill.querySelector('select')) return;
-            const hasText = (pill.textContent || '').trim().length > 0;
-            if (!hasText) setBracketPlaceholder(matchId, pos, label);
-        });
-    });
-}
 
 function getThirdConfirmationSignature(qualified) {
     if (!qualified?.allGroupsFinished || !Array.isArray(qualified.thirdPlaceData)) return null;
@@ -409,13 +434,10 @@ function setBracketPlaceholder(matchId, position, label, icon = '⏳') {
     const pill = matchEl.querySelector(`.team-pill[data-team-pos="${position}"]`);
     if (!pill) return;
 
-    const safeLabel = label || 'Pendiente';
     pill.classList.add('placeholder');
-    pill.classList.remove('loser', 'third-select-pill');
+    pill.classList.remove('loser');
     delete pill.dataset.teamCode;
-    pill.dataset.label = safeLabel;
-    pill.setAttribute('title', safeLabel);
-    pill.innerHTML = `<span class="flag">${escapeHTML(icon)}</span><span class="code placeholder-label" title="${escapeHTML(safeLabel)}">${escapeHTML(safeLabel)}</span>`;
+    pill.innerHTML = `<span class="flag">${escapeHTML(icon)}</span><span class="code placeholder-label" title="${escapeHTML(label)}">${escapeHTML(label)}</span>`;
 }
 
 function getGroupOrderedCodesFromTable(groupId) {
@@ -1001,17 +1023,16 @@ function initApp() {
     generateGroupsHTML();
     hideSplash(6000);
     generateBracketHTML();
-    ensureBracketPillFallbackLabels();
     initializeEventListeners();
 
     startSaveTicker();
-    startUpcomingAgenda();
     updateSaveIndicator();
 
     // Cargamos el estado del usuario
     loadStateFromStorage();
     updateProgressUI();
     updateSaveIndicator();
+    startUpcomingAgendaTicker();
 
     // Verificamos si el usuario ya tiene un nombre guardado
     const savedState = JSON.parse(localStorage.getItem(storageKey));
@@ -1352,6 +1373,7 @@ function initializeEventListeners() {
             markDirty();
             updateAllCalculations();
             updateProgressUI();
+            renderUpcomingPanel();
         }
     });
     document.getElementById('groups-container').addEventListener('click', (e) => {
@@ -1365,6 +1387,7 @@ function initializeEventListeners() {
             markDirty();
             updateAllCalculations();
             updateProgressUI();
+            renderUpcomingPanel();
         }
 
         if (e.target.classList.contains('manual-rank-btn')) {
@@ -1769,7 +1792,6 @@ function updateAllCalculations() {
     updateGlobalStats();
 
     updateProgressUI();
-    renderUpcomingAgenda();
     saveStateToStorage();
 }
 
@@ -2082,7 +2104,6 @@ function populateBracketFIFA(qualified) {
 
     // Si el usuario ya confirmó terceros y asignó cruces, se colocan aquí.
     applyThirdAssignmentsToBracket(qualified);
-    ensureBracketPillFallbackLabels();
 }
 
 // --- Tabla Annexe C (FIFA) ---
@@ -2313,8 +2334,6 @@ function clearBracket() {
         champ.innerHTML = '';
         delete champ.dataset.teamCode;
     }
-
-    ensureBracketPillFallbackLabels();
 }
 
 
