@@ -215,185 +215,6 @@ function renderTeamName(code, side) {
     </span>`;
 }
 
-
-let upcomingAgendaTimer = null;
-
-function parseScheduleDateToUTC(item) {
-    if (!item?.date || !item?.time) return null;
-
-    const months = {
-        enero: 0, febrero: 1, marzo: 2, abril: 3, mayo: 4, junio: 5,
-        julio: 6, agosto: 7, septiembre: 8, setiembre: 8, octubre: 9,
-        noviembre: 10, diciembre: 11
-    };
-
-    const dateMatch = String(item.date).match(/(\d{1,2})\s+([A-Za-záéíóúñ]+)\s+(\d{4})/i);
-    const timeMatch = String(item.time).match(/(\d{1,2}):(\d{2})/);
-    if (!dateMatch || !timeMatch) return null;
-
-    const day = Number(dateMatch[1]);
-    const monthName = dateMatch[2].toLowerCase();
-    const year = Number(dateMatch[3]);
-    const month = months[monthName];
-    const hour = Number(timeMatch[1]);
-    const minute = Number(timeMatch[2]);
-
-    if (Number.isNaN(day) || Number.isNaN(year) || Number.isNaN(hour) || Number.isNaN(minute) || month === undefined) {
-        return null;
-    }
-
-    return new Date(Date.UTC(year, month, day, hour + 6, minute));
-}
-
-function formatAgendaNow() {
-    return new Intl.DateTimeFormat('es-MX', {
-        timeZone: 'America/Mexico_City',
-        day: 'numeric',
-        month: 'short',
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true
-    }).format(new Date()).replace(',', '');
-}
-
-function formatCountdown(targetDate) {
-    if (!(targetDate instanceof Date) || Number.isNaN(targetDate.getTime())) return '';
-    const diff = targetDate.getTime() - Date.now();
-    if (diff <= 0) return 'Está por iniciar o ya comenzó';
-
-    const totalMinutes = Math.floor(diff / 60000);
-    const days = Math.floor(totalMinutes / (60 * 24));
-    const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
-    const minutes = totalMinutes % 60;
-
-    if (days > 0) return `Faltan ${days} d ${hours} h`;
-    if (hours > 0) return `Faltan ${hours} h ${minutes} min`;
-    return `Faltan ${minutes} min`;
-}
-
-function getGroupMatchScheduleEntries() {
-    const schedule = getScheduleData();
-    const pairings = [[0, 1], [2, 3], [0, 2], [1, 3], [0, 3], [1, 2]];
-
-    return groupsData.flatMap(group => {
-        return pairings.map(([i, j], matchIndex) => {
-            const item = schedule?.groups?.[group.id]?.[matchIndex];
-            const homeCode = group.codes[i];
-            const awayCode = group.codes[j];
-            const matchId = getGroupPredictionMatchId(group.id, matchIndex);
-            return {
-                matchId,
-                groupId: group.id,
-                matchNo: item?.no ? `M${item.no}` : `M${matchIndex + 1}`,
-                homeCode,
-                awayCode,
-                homeName: getTeamDisplayName(homeCode),
-                awayName: getTeamDisplayName(awayCode),
-                homeFlag: getTeamFlag(homeCode),
-                awayFlag: getTeamFlag(awayCode),
-                dateText: item?.date || '',
-                timeText: item?.time || '',
-                venue: item?.venue || '',
-                city: item?.city || '',
-                startsAt: parseScheduleDateToUTC(item)
-            };
-        });
-    }).sort((a, b) => {
-        const aTime = a.startsAt ? a.startsAt.getTime() : Number.MAX_SAFE_INTEGER;
-        const bTime = b.startsAt ? b.startsAt.getTime() : Number.MAX_SAFE_INTEGER;
-        return aTime - bTime;
-    });
-}
-
-function isGroupMatchCompleteById(matchId) {
-    const matchEl = document.querySelector(`.match-grid[data-match-id="${matchId}"]`);
-    if (!matchEl) return false;
-    const inputs = [...matchEl.querySelectorAll('.score-input')];
-    return inputs.length === 2 && inputs.every(input => input.value !== '');
-}
-
-function getUpcomingMatches(limit = 5) {
-    return getGroupMatchScheduleEntries()
-        .filter(entry => !isGroupMatchCompleteById(entry.matchId))
-        .slice(0, limit);
-}
-
-function renderUpcomingPanel() {
-    const nowEl = document.getElementById('upcoming-now');
-    const summaryEl = document.getElementById('upcoming-summary');
-    const listEl = document.getElementById('upcoming-list');
-    if (!nowEl || !summaryEl || !listEl) return;
-
-    nowEl.innerHTML = `<span class="upcoming-now__label">Hora CDMX</span><strong>${escapeHTML(formatAgendaNow())}</strong>`;
-
-    const matches = getUpcomingMatches(5);
-    if (!matches.length) {
-        summaryEl.innerHTML = `
-            <div class="upcoming-featured upcoming-featured--done">
-                <div class="upcoming-featured__main">
-                    <span class="upcoming-featured__tag">Agenda completa</span>
-                    <h3>Ya no hay partidos pendientes en fase de grupos</h3>
-                    <p>Todos los encuentros programados de grupos ya tienen marcador capturado.</p>
-                </div>
-            </div>`;
-        listEl.innerHTML = '';
-        return;
-    }
-
-    const [nextMatch, ...otherMatches] = matches;
-    const placeText = [nextMatch.venue, nextMatch.city].filter(Boolean).join(' · ');
-    const dateTimeText = [nextMatch.dateText, nextMatch.timeText].filter(Boolean).join(' · ');
-
-    summaryEl.innerHTML = `
-        <article class="upcoming-featured">
-            <div class="upcoming-featured__main">
-                <div class="upcoming-featured__eyebrow">
-                    <span class="upcoming-match-badge">${escapeHTML(nextMatch.matchNo)}</span>
-                    <span class="upcoming-group-pill">Grupo ${escapeHTML(nextMatch.groupId)}</span>
-                </div>
-                <h3 class="upcoming-featured__headline">Próximo partido por jugar</h3>
-                <div class="upcoming-featured__teams">
-                    <span class="upcoming-team upcoming-team--home"><span class="upcoming-team__flag">${escapeHTML(nextMatch.homeFlag)}</span><span>${escapeHTML(nextMatch.homeName)}</span></span>
-                    <span class="upcoming-featured__vs">vs</span>
-                    <span class="upcoming-team upcoming-team--away"><span class="upcoming-team__flag">${escapeHTML(nextMatch.awayFlag)}</span><span>${escapeHTML(nextMatch.awayName)}</span></span>
-                </div>
-                <div class="upcoming-featured__meta">
-                    <span>${escapeHTML(dateTimeText)}</span>
-                    ${placeText ? `<span>${escapeHTML(placeText)}</span>` : ''}
-                </div>
-            </div>
-            <div class="upcoming-featured__side">
-                <div class="upcoming-countdown">${escapeHTML(formatCountdown(nextMatch.startsAt))}</div>
-                <div class="upcoming-side-note">Se actualiza conforme capturas resultados.</div>
-            </div>
-        </article>`;
-
-    listEl.innerHTML = otherMatches.map(match => {
-        const compactDate = [match.dateText, match.timeText].filter(Boolean).join(' · ');
-        const compactPlace = [match.venue, match.city].filter(Boolean).join(' · ');
-        return `
-            <article class="upcoming-card">
-                <div class="upcoming-card__top">
-                    <span class="upcoming-match-badge">${escapeHTML(match.matchNo)}</span>
-                    <span class="upcoming-group-pill">Grupo ${escapeHTML(match.groupId)}</span>
-                </div>
-                <div class="upcoming-card__teams">
-                    <div class="upcoming-card__team"><span class="upcoming-team__flag">${escapeHTML(match.homeFlag)}</span><span>${escapeHTML(match.homeName)}</span></div>
-                    <div class="upcoming-card__vs">vs</div>
-                    <div class="upcoming-card__team"><span class="upcoming-team__flag">${escapeHTML(match.awayFlag)}</span><span>${escapeHTML(match.awayName)}</span></div>
-                </div>
-                <div class="upcoming-card__meta">${escapeHTML(compactDate)}</div>
-                <div class="upcoming-card__meta upcoming-card__meta--secondary">${escapeHTML(compactPlace)}</div>
-            </article>`;
-    }).join('');
-}
-
-function startUpcomingAgendaTicker() {
-    renderUpcomingPanel();
-    if (upcomingAgendaTimer) clearInterval(upcomingAgendaTimer);
-    upcomingAgendaTimer = setInterval(renderUpcomingPanel, 60000);
-}
-
 const THIRD_ASSIGNMENT_SLOTS = [
     { matchId: '16-2',  matchNo: 'M74', winnerGroup: 'E', label: '1E vs 3º A/B/C/D/F', allowed: ['A','B','C','D','F'] },
     { matchId: '16-5',  matchNo: 'M77', winnerGroup: 'I', label: '1I vs 3º C/D/F/G/H', allowed: ['C','D','F','G','H'] },
@@ -403,6 +224,18 @@ const THIRD_ASSIGNMENT_SLOTS = [
     { matchId: '16-10', matchNo: 'M82', winnerGroup: 'G', label: '1G vs 3º A/E/H/I/J', allowed: ['A','E','H','I','J'] },
     { matchId: '16-13', matchNo: 'M85', winnerGroup: 'B', label: '1B vs 3º E/F/G/I/J', allowed: ['E','F','G','I','J'] },
     { matchId: '16-15', matchNo: 'M87', winnerGroup: 'K', label: '1K vs 3º D/E/I/J/L', allowed: ['D','E','I','J','L'] }
+];
+
+
+const FIXED_R32_SLOTS = [
+    { matchId: '16-1',  home: { bucket: 'second', group: 'A', label: '2º Grupo A' }, away: { bucket: 'second', group: 'B', label: '2º Grupo B' } },
+    { matchId: '16-3',  home: { bucket: 'first',  group: 'F', label: '1º Grupo F' }, away: { bucket: 'second', group: 'C', label: '2º Grupo C' } },
+    { matchId: '16-4',  home: { bucket: 'first',  group: 'C', label: '1º Grupo C' }, away: { bucket: 'second', group: 'F', label: '2º Grupo F' } },
+    { matchId: '16-6',  home: { bucket: 'second', group: 'E', label: '2º Grupo E' }, away: { bucket: 'second', group: 'I', label: '2º Grupo I' } },
+    { matchId: '16-11', home: { bucket: 'second', group: 'K', label: '2º Grupo K' }, away: { bucket: 'second', group: 'L', label: '2º Grupo L' } },
+    { matchId: '16-12', home: { bucket: 'first',  group: 'H', label: '1º Grupo H' }, away: { bucket: 'second', group: 'J', label: '2º Grupo J' } },
+    { matchId: '16-14', home: { bucket: 'first',  group: 'J', label: '1º Grupo J' }, away: { bucket: 'second', group: 'H', label: '2º Grupo H' } },
+    { matchId: '16-16', home: { bucket: 'second', group: 'D', label: '2º Grupo D' }, away: { bucket: 'second', group: 'G', label: '2º Grupo G' } }
 ];
 
 function getThirdConfirmationSignature(qualified) {
@@ -476,10 +309,58 @@ function resolveFixedBracketTeamFromCurrentTable(placeholderLabel) {
     return ordered[rank - 1] || null;
 }
 
-function setBracketSlot(matchId, position, teamCode, placeholderLabel) {
-    const resolvedCode = teamCode || resolveFixedBracketTeamFromCurrentTable(placeholderLabel);
-    if (resolvedCode) updateNextMatch(matchId, position, resolvedCode);
-    else setBracketPlaceholder(matchId, position, placeholderLabel);
+
+
+function pillHasRenderableContent(pill) {
+    if (!pill) return false;
+    const text = (pill.textContent || '').replace(/\s+/g, ' ').trim();
+    return Boolean(pill.dataset.teamCode || pill.querySelector('select') || text);
+}
+
+function ensureBracketSeedVisibility(qualified) {
+    FIXED_R32_SLOTS.forEach(slot => {
+        ['home', 'away'].forEach(position => {
+            const config = slot[position];
+            const matchEl = document.querySelector(`[data-match-id="${slot.matchId}"]`);
+            const pill = matchEl?.querySelector(`.team-pill[data-team-pos="${position}"]`);
+            if (!pill || pillHasRenderableContent(pill)) return;
+            const teamCode = qualified?.[config.bucket]?.[config.group] || null;
+            setBracketSlot(slot.matchId, position, teamCode, config.label);
+        });
+    });
+
+    THIRD_ASSIGNMENT_SLOTS.forEach(slot => {
+        const homeMatch = document.querySelector(`[data-match-id="${slot.matchId}"] .team-pill[data-team-pos="home"]`);
+        if (homeMatch && !pillHasRenderableContent(homeMatch)) {
+            setBracketSlot(slot.matchId, 'home', qualified?.first?.[slot.winnerGroup] || null, `1º Grupo ${slot.winnerGroup}`);
+        }
+
+        const awayMatch = document.querySelector(`[data-match-id="${slot.matchId}"] .team-pill[data-team-pos="away"]`);
+        if (!awayMatch || pillHasRenderableContent(awayMatch)) return;
+
+        if (areThirdsConfirmed(qualified)) {
+            renderThirdSelectorInBracket(qualified, slot);
+            const refreshed = document.querySelector(`[data-match-id="${slot.matchId}"] .team-pill[data-team-pos="away"]`);
+            if (!pillHasRenderableContent(refreshed)) {
+                setBracketPlaceholder(slot.matchId, 'away', `3º ${slot.allowed.join('/')}`);
+            }
+        } else {
+            setBracketPlaceholder(slot.matchId, 'away', `3º ${slot.allowed.join('/')}`);
+        }
+    });
+}
+
+function refreshBracketSeedsFromCurrentState() {
+    const finishedGroups = new Set();
+    groupsData.forEach(group => {
+        if (isGroupCompleteForBracket(group.id)) finishedGroups.add(group.id);
+    });
+    const qualified = getQualifiedTeams({ finishedGroups });
+    ensureBracketSeedVisibility(qualified);
+}
+
+function repairEmptyBracketSeeds() {
+    requestAnimationFrame(() => refreshBracketSeedsFromCurrentState());
 }
 
 function getTopThirdGroupSet(qualified) {
@@ -1032,7 +913,6 @@ function initApp() {
     loadStateFromStorage();
     updateProgressUI();
     updateSaveIndicator();
-    startUpcomingAgendaTicker();
 
     // Verificamos si el usuario ya tiene un nombre guardado
     const savedState = JSON.parse(localStorage.getItem(storageKey));
@@ -1373,7 +1253,6 @@ function initializeEventListeners() {
             markDirty();
             updateAllCalculations();
             updateProgressUI();
-            renderUpcomingPanel();
         }
     });
     document.getElementById('groups-container').addEventListener('click', (e) => {
@@ -1387,7 +1266,6 @@ function initializeEventListeners() {
             markDirty();
             updateAllCalculations();
             updateProgressUI();
-            renderUpcomingPanel();
         }
 
         if (e.target.classList.contains('manual-rank-btn')) {
@@ -1723,6 +1601,7 @@ function handleBracketScoreChange(matchContainer) {
 
     // Guardamos el estado en cualquier cambio
     saveStateToStorage();
+    repairEmptyBracketSeeds();
 }
 
 
@@ -2063,38 +1942,10 @@ function populateBracketFIFA(qualified) {
     //    Los 1º y 2º de grupo entran automáticamente.
     //    Los terceros quedan como espacios pendientes hasta confirmarlos y seleccionarlos.
     // --------------------------------------------------
-
-    // M73: 2A vs 2B
-    setBracketSlot('16-1', 'home', qualified.second['A'], '2º Grupo A');
-    setBracketSlot('16-1', 'away', qualified.second['B'], '2º Grupo B');
-
-    // M75: 1F vs 2C
-    setBracketSlot('16-3', 'home', qualified.first['F'], '1º Grupo F');
-    setBracketSlot('16-3', 'away', qualified.second['C'], '2º Grupo C');
-
-    // M76: 1C vs 2F
-    setBracketSlot('16-4', 'home', qualified.first['C'], '1º Grupo C');
-    setBracketSlot('16-4', 'away', qualified.second['F'], '2º Grupo F');
-
-    // M78: 2E vs 2I
-    setBracketSlot('16-6', 'home', qualified.second['E'], '2º Grupo E');
-    setBracketSlot('16-6', 'away', qualified.second['I'], '2º Grupo I');
-
-    // M83: 2K vs 2L
-    setBracketSlot('16-11', 'home', qualified.second['K'], '2º Grupo K');
-    setBracketSlot('16-11', 'away', qualified.second['L'], '2º Grupo L');
-
-    // M84: 1H vs 2J
-    setBracketSlot('16-12', 'home', qualified.first['H'], '1º Grupo H');
-    setBracketSlot('16-12', 'away', qualified.second['J'], '2º Grupo J');
-
-    // M86: 1J vs 2H
-    setBracketSlot('16-14', 'home', qualified.first['J'], '1º Grupo J');
-    setBracketSlot('16-14', 'away', qualified.second['H'], '2º Grupo H');
-
-    // M88: 2D vs 2G
-    setBracketSlot('16-16', 'home', qualified.second['D'], '2º Grupo D');
-    setBracketSlot('16-16', 'away', qualified.second['G'], '2º Grupo G');
+    FIXED_R32_SLOTS.forEach(slot => {
+        setBracketSlot(slot.matchId, 'home', qualified?.[slot.home.bucket]?.[slot.home.group] || null, slot.home.label);
+        setBracketSlot(slot.matchId, 'away', qualified?.[slot.away.bucket]?.[slot.away.group] || null, slot.away.label);
+    });
 
     // Partidos con terceros: lado fijo automático + tercer lugar pendiente/manual.
     THIRD_ASSIGNMENT_SLOTS.forEach(slot => {
@@ -2104,6 +1955,7 @@ function populateBracketFIFA(qualified) {
 
     // Si el usuario ya confirmó terceros y asignó cruces, se colocan aquí.
     applyThirdAssignmentsToBracket(qualified);
+    ensureBracketSeedVisibility(qualified);
 }
 
 // --- Tabla Annexe C (FIFA) ---
@@ -2488,6 +2340,7 @@ function loadStateFromStorage() {
     }
 
     isLoading = false; // --- Desactivamos la bandera de carga al finalizar ---
+    repairEmptyBracketSeeds();
 }
 
 // ==================================================
