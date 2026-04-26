@@ -195,6 +195,111 @@ function renderGroupMatchMeta(groupId, matchIndex) {
         </div>`;
 }
 
+
+function parseCdmxDateTime(item) {
+    if (!item || !item.date || !item.time) return null;
+    const months = {
+        enero: 0, febrero: 1, marzo: 2, abril: 3, mayo: 4, junio: 5,
+        julio: 6, agosto: 7, septiembre: 8, octubre: 9, noviembre: 10, diciembre: 11
+    };
+    const d = String(item.date).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const m = d.match(/(\d{1,2})\s+([a-z]+)\s+(\d{4})/);
+    const t = String(item.time).match(/(\d{1,2}):(\d{2})/);
+    if (!m || !t) return null;
+    const day = Number(m[1]);
+    const month = months[m[2]];
+    const year = Number(m[3]);
+    const hour = Number(t[1]);
+    const minute = Number(t[2]);
+    if (month === undefined) return null;
+    return new Date(Date.UTC(year, month, day, hour + 6, minute, 0));
+}
+
+function getGroupMatchTeams(groupId, matchIndex) {
+    const group = groupsData.find(g => g.id === groupId);
+    if (!group) return { home: 'Por definir', away: 'Por definir' };
+    const pairs = [[0, 1], [2, 3], [0, 2], [1, 3], [0, 3], [1, 2]];
+    const pair = pairs[matchIndex] || [0, 1];
+    return { home: getTeamDisplayName(group.codes[pair[0]]), away: getTeamDisplayName(group.codes[pair[1]]) };
+}
+
+function getBracketSlotText(matchId, pos) {
+    const pill = document.querySelector(`[data-match-id="${matchId}"] .team-pill[data-team-pos="${pos}"]`);
+    const txt = (pill?.querySelector('.code')?.textContent || pill?.textContent || '').trim();
+    if (txt) return txt;
+    return BRACKET_FALLBACK_LABELS?.[matchId]?.[pos] || 'Por definir';
+}
+
+function getScheduledMatches() {
+    const schedule = getScheduleData();
+    const matches = [];
+    Object.entries(schedule.groups || {}).forEach(([groupId, items]) => {
+        (items || []).forEach((item, index) => {
+            const start = parseCdmxDateTime(item);
+            if (!start) return;
+            const teams = getGroupMatchTeams(groupId, index);
+            matches.push({ id: `G${groupId}-${index}`, no: item.no, phase: `Grupo ${groupId}`, home: teams.home, away: teams.away, date: item.date, time: item.time, venue: item.venue, city: item.city, start });
+        });
+    });
+    Object.entries(schedule.bracket || {}).forEach(([matchId, item]) => {
+        const start = parseCdmxDateTime(item);
+        if (!start) return;
+        matches.push({
+            id: matchId,
+            no: item.no,
+            phase: matchId.startsWith('16-') ? 'Dieciseisavos' : matchId.startsWith('8-') ? 'Octavos' : matchId.startsWith('4-') ? 'Cuartos' : matchId.startsWith('2-') ? 'Semifinal' : matchId === '3-1' ? 'Tercer lugar' : 'Final',
+            home: getBracketSlotText(matchId, 'home'),
+            away: getBracketSlotText(matchId, 'away'),
+            date: item.date,
+            time: item.time,
+            venue: item.venue,
+            city: item.city,
+            start
+        });
+    });
+    return matches.sort((a, b) => a.start - b.start || Number(a.no || 0) - Number(b.no || 0));
+}
+
+function formatRemaining(ms) {
+    if (ms <= 0) return 'En juego o por iniciar';
+    const minutes = Math.floor(ms / 60000);
+    const days = Math.floor(minutes / 1440);
+    const hours = Math.floor((minutes % 1440) / 60);
+    const mins = minutes % 60;
+    if (days > 0) return `Faltan ${days} d ${hours} h`;
+    if (hours > 0) return `Faltan ${hours} h ${mins} min`;
+    return `Faltan ${mins} min`;
+}
+
+function renderUpcomingAgenda() {
+    const nowEl = document.getElementById('upcoming-now');
+    const summaryEl = document.getElementById('upcoming-summary');
+    const listEl = document.getElementById('upcoming-list');
+    if (!summaryEl || !listEl) return;
+    const now = new Date();
+    if (nowEl) nowEl.textContent = `Hora CDMX — ${now.toLocaleString('es-MX', { timeZone: 'America/Mexico_City', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}`;
+    const matches = getScheduledMatches();
+    const upcoming = matches.filter(m => (m.start.getTime() + 2 * 60 * 60 * 1000) >= now.getTime()).slice(0, 5);
+    if (!matches.length) { summaryEl.textContent = 'No se encontró calendario cargado.'; listEl.innerHTML = ''; return; }
+    if (!upcoming.length) { summaryEl.textContent = 'El calendario del torneo ya terminó.'; listEl.innerHTML = ''; return; }
+    const first = upcoming[0];
+    summaryEl.innerHTML = `<strong>M${first.no}</strong> · ${escapeHTML(first.phase)} · ${escapeHTML(first.home)} vs ${escapeHTML(first.away)}<br><span>${escapeHTML(first.date)} · ${escapeHTML(first.time)} · ${escapeHTML(first.venue)} · ${escapeHTML(first.city)}</span><br><em>${formatRemaining(first.start.getTime() - now.getTime())}</em>`;
+    listEl.innerHTML = upcoming.map(m => `
+        <div class="upcoming-card">
+            <div class="upcoming-card__top"><span>M${escapeHTML(String(m.no))}</span><span>${escapeHTML(m.phase)}</span></div>
+            <div class="upcoming-card__teams">${escapeHTML(m.home)} <span>vs</span> ${escapeHTML(m.away)}</div>
+            <div class="upcoming-card__meta">${escapeHTML(m.date)} · ${escapeHTML(m.time)}</div>
+            <div class="upcoming-card__meta">${escapeHTML(m.venue)} · ${escapeHTML(m.city)}</div>
+        </div>`).join('');
+}
+
+let upcomingAgendaTimer = null;
+function startUpcomingAgenda() {
+    renderUpcomingAgenda();
+    if (upcomingAgendaTimer) clearInterval(upcomingAgendaTimer);
+    upcomingAgendaTimer = setInterval(renderUpcomingAgenda, 60000);
+}
+
 function renderTeamName(code, side) {
     const name = getTeamDisplayName(code);
     const flag = getTeamFlag(code);
@@ -226,18 +331,8 @@ const THIRD_ASSIGNMENT_SLOTS = [
     { matchId: '16-15', matchNo: 'M87', winnerGroup: 'K', label: '1K vs 3º D/E/I/J/L', allowed: ['D','E','I','J','L'] }
 ];
 
-const BRACKET_MATCH_LABELS = {
-    '16-1': 'M73',  '16-2': 'M74',  '16-3': 'M75',  '16-4': 'M76',
-    '16-5': 'M77',  '16-6': 'M78',  '16-7': 'M79',  '16-8': 'M80',
-    '16-9': 'M81',  '16-10': 'M82', '16-11': 'M83', '16-12': 'M84',
-    '16-13': 'M85', '16-14': 'M86', '16-15': 'M87', '16-16': 'M88',
-    '8-1': 'M89',   '8-2': 'M90',   '8-3': 'M91',   '8-4': 'M92',
-    '8-5': 'M93',   '8-6': 'M94',   '8-7': 'M95',   '8-8': 'M96',
-    '4-1': 'M97',   '4-2': 'M98',   '4-3': 'M99',   '4-4': 'M100',
-    '2-1': 'M101',  '2-2': 'M102',  '1-1': 'M103',  '3-1': 'M104'
-};
 
-const BRACKET_DEFAULT_PLACEHOLDERS = {
+const BRACKET_FALLBACK_LABELS = {
     '16-1':  { home: '2º Grupo A', away: '2º Grupo B' },
     '16-2':  { home: '1º Grupo E', away: '3º A/B/C/D/F' },
     '16-3':  { home: '1º Grupo F', away: '2º Grupo C' },
@@ -272,38 +367,18 @@ const BRACKET_DEFAULT_PLACEHOLDERS = {
     '3-1':   { home: 'Perdedor M101', away: 'Perdedor M102' }
 };
 
-function getBracketRoundTitle(roundKey) {
-    return {
-        r32: 'Dieciseisavos',
-        r16: 'Octavos',
-        r8: 'Cuartos',
-        sf: 'Semifinal'
-    }[roundKey] || '';
-}
-
-function renderBracketMatch(matchId) {
-    const matchLabel = BRACKET_MATCH_LABELS[matchId] || matchId;
-    return `
-        <div class="match-container" data-match-id="${matchId}">
-            <div class="match-badge">${matchLabel}</div>
-            <div class="team-pill placeholder" data-team-pos="home"></div>
-            <div class="team-pill placeholder" data-team-pos="away"></div>
-        </div>`;
-}
-
-function applyBracketVisualPlaceholders() {
-    Object.entries(BRACKET_DEFAULT_PLACEHOLDERS).forEach(([matchId, slots]) => {
-        if (slots.home) setBracketPlaceholder(matchId, 'home', slots.home);
-        if (slots.away) setBracketPlaceholder(matchId, 'away', slots.away);
+function ensureBracketPillFallbackLabels() {
+    Object.entries(BRACKET_FALLBACK_LABELS).forEach(([matchId, slots]) => {
+        const matchEl = document.querySelector(`[data-match-id="${matchId}"]`);
+        if (!matchEl) return;
+        Object.entries(slots).forEach(([pos, label]) => {
+            const pill = matchEl.querySelector(`.team-pill[data-team-pos="${pos}"]`);
+            if (!pill || pill.dataset.teamCode || pill.querySelector('select')) return;
+            const hasText = (pill.textContent || '').trim().length > 0;
+            if (!hasText) setBracketPlaceholder(matchId, pos, label);
+        });
     });
-
-    const champion = document.querySelector('[data-match-id="champion"]');
-    if (champion) {
-        champion.classList.add('placeholder');
-        champion.innerHTML = `<span class="flag">🏆</span><span class="code placeholder-label">Campeón</span>`;
-    }
 }
-
 
 function getThirdConfirmationSignature(qualified) {
     if (!qualified?.allGroupsFinished || !Array.isArray(qualified.thirdPlaceData)) return null;
@@ -334,10 +409,13 @@ function setBracketPlaceholder(matchId, position, label, icon = '⏳') {
     const pill = matchEl.querySelector(`.team-pill[data-team-pos="${position}"]`);
     if (!pill) return;
 
+    const safeLabel = label || 'Pendiente';
     pill.classList.add('placeholder');
-    pill.classList.remove('loser');
+    pill.classList.remove('loser', 'third-select-pill');
     delete pill.dataset.teamCode;
-    pill.innerHTML = `<span class="flag">${escapeHTML(icon)}</span><span class="code placeholder-label" title="${escapeHTML(label)}">${escapeHTML(label)}</span>`;
+    pill.dataset.label = safeLabel;
+    pill.setAttribute('title', safeLabel);
+    pill.innerHTML = `<span class="flag">${escapeHTML(icon)}</span><span class="code placeholder-label" title="${escapeHTML(safeLabel)}">${escapeHTML(safeLabel)}</span>`;
 }
 
 function getGroupOrderedCodesFromTable(groupId) {
@@ -923,9 +1001,11 @@ function initApp() {
     generateGroupsHTML();
     hideSplash(6000);
     generateBracketHTML();
+    ensureBracketPillFallbackLabels();
     initializeEventListeners();
 
     startSaveTicker();
+    startUpcomingAgenda();
     updateSaveIndicator();
 
     // Cargamos el estado del usuario
@@ -1114,17 +1194,35 @@ function generateBracketHTML() {
     // Nueva estructura: dos alas (izquierda y derecha) y una columna central para la final
     container.innerHTML = `
         <div class="bracket-wing left-wing">
-            <div class="bracket-round r32" data-round-title="${getBracketRoundTitle('r32')}">
-                ${Array.from({ length: 8 }, (_, i) => renderBracketMatch(`16-${i + 1}`)).join('')}
+            <div class="bracket-round r32">
+                ${Array.from({ length: 8 }, (_, i) => `
+                    <div class="match-container" data-match-id="16-${i + 1}">
+                        <div class="team-pill placeholder" data-team-pos="home"></div>
+                        <div class="team-pill placeholder" data-team-pos="away"></div>
+                    </div>
+                `).join('')}
             </div>
-            <div class="bracket-round r16" data-round-title="${getBracketRoundTitle('r16')}">
-                ${Array.from({ length: 4 }, (_, i) => renderBracketMatch(`8-${i + 1}`)).join('')}
+            <div class="bracket-round r16">
+                ${Array.from({ length: 4 }, (_, i) => `
+                    <div class="match-container" data-match-id="8-${i + 1}">
+                        <div class="team-pill placeholder" data-team-pos="home"></div>
+                        <div class="team-pill placeholder" data-team-pos="away"></div>
+                    </div>
+                `).join('')}
             </div>
-            <div class="bracket-round r8" data-round-title="${getBracketRoundTitle('r8')}">
-                ${Array.from({ length: 2 }, (_, i) => renderBracketMatch(`4-${i + 1}`)).join('')}
+            <div class="bracket-round r8">
+                ${Array.from({ length: 2 }, (_, i) => `
+                    <div class="match-container" data-match-id="4-${i + 1}">
+                        <div class="team-pill placeholder" data-team-pos="home"></div>
+                        <div class="team-pill placeholder" data-team-pos="away"></div>
+                    </div>
+                `).join('')}
             </div>
-            <div class="bracket-round sf" data-round-title="${getBracketRoundTitle('sf')}">
-                ${renderBracketMatch('2-1')}
+            <div class="bracket-round sf">
+                <div class="match-container" data-match-id="2-1">
+                    <div class="team-pill placeholder" data-team-pos="home"></div>
+                    <div class="team-pill placeholder" data-team-pos="away"></div>
+                </div>
             </div>
         </div>
 
@@ -1140,7 +1238,10 @@ function generateBracketHTML() {
         <!-- ============================================ -->
             <div class="final-match-wrapper">
                 <h3 class="final-title">FINAL</h3>
-                ${renderBracketMatch('1-1')}
+                <div class="match-container" data-match-id="1-1">
+                    <div class="team-pill placeholder" data-team-pos="home"></div>
+                    <div class="team-pill placeholder" data-team-pos="away"></div>
+                </div>
                 <div class="champion-wrapper">
                     <h3 class="champion-title">¡CAMPEÓN!</h3>
                     <div class="team-pill placeholder champion-pill" data-match-id="champion"></div>
@@ -1148,22 +1249,43 @@ function generateBracketHTML() {
             </div>
             <div class="third-place-match-wrapper">
                 <h3 class="final-title">Tercer Lugar</h3>
-                ${renderBracketMatch('3-1')}
+                <div class="match-container" data-match-id="3-1">
+                    <div class="team-pill placeholder" data-team-pos="home"></div>
+                    <div class="team-pill placeholder" data-team-pos="away"></div>
+                </div>
             </div>
         </div>
 
         <div class="bracket-wing right-wing">
-            <div class="bracket-round r32" data-round-title="${getBracketRoundTitle('r32')}">
-                ${Array.from({ length: 8 }, (_, i) => renderBracketMatch(`16-${i + 9}`)).join('')}
+            <div class="bracket-round r32">
+                ${Array.from({ length: 8 }, (_, i) => `
+                    <div class="match-container" data-match-id="16-${i + 9}">
+                        <div class="team-pill placeholder" data-team-pos="home"></div>
+                        <div class="team-pill placeholder" data-team-pos="away"></div>
+                    </div>
+                `).join('')}
             </div>
-            <div class="bracket-round r16" data-round-title="${getBracketRoundTitle('r16')}">
-                ${Array.from({ length: 4 }, (_, i) => renderBracketMatch(`8-${i + 5}`)).join('')}
+            <div class="bracket-round r16">
+                ${Array.from({ length: 4 }, (_, i) => `
+                    <div class="match-container" data-match-id="8-${i + 5}">
+                        <div class="team-pill placeholder" data-team-pos="home"></div>
+                        <div class="team-pill placeholder" data-team-pos="away"></div>
+                    </div>
+                `).join('')}
             </div>
-            <div class="bracket-round r8" data-round-title="${getBracketRoundTitle('r8')}">
-                ${Array.from({ length: 2 }, (_, i) => renderBracketMatch(`4-${i + 3}`)).join('')}
+            <div class="bracket-round r8">
+                ${Array.from({ length: 2 }, (_, i) => `
+                    <div class="match-container" data-match-id="4-${i + 3}">
+                        <div class="team-pill placeholder" data-team-pos="home"></div>
+                        <div class="team-pill placeholder" data-team-pos="away"></div>
+                    </div>
+                `).join('')}
             </div>
-            <div class="bracket-round sf" data-round-title="${getBracketRoundTitle('sf')}">
-                ${renderBracketMatch('2-2')}
+            <div class="bracket-round sf">
+                <div class="match-container" data-match-id="2-2">
+                    <div class="team-pill placeholder" data-team-pos="home"></div>
+                    <div class="team-pill placeholder" data-team-pos="away"></div>
+                </div>
             </div>
         </div>
     `;
@@ -1177,7 +1299,6 @@ function generateBracketHTML() {
         }
     });
 
-    applyBracketVisualPlaceholders();
     addScrollIndicatorToBracket();
 }
 
@@ -1648,6 +1769,7 @@ function updateAllCalculations() {
     updateGlobalStats();
 
     updateProgressUI();
+    renderUpcomingAgenda();
     saveStateToStorage();
 }
 
@@ -1960,6 +2082,7 @@ function populateBracketFIFA(qualified) {
 
     // Si el usuario ya confirmó terceros y asignó cruces, se colocan aquí.
     applyThirdAssignmentsToBracket(qualified);
+    ensureBracketPillFallbackLabels();
 }
 
 // --- Tabla Annexe C (FIFA) ---
@@ -2167,14 +2290,23 @@ function populateBracket(qualified) {
 
 function clearBracket() {
     document.querySelectorAll('.bracket-container-topdown .match-container').forEach(match => {
+        // Limpiar estados visuales
         match.querySelectorAll('.team-pill').forEach(pill => {
             pill.classList.remove('loser');
-            pill.classList.add('placeholder');
-            pill.innerHTML = '';
-            delete pill.dataset.teamCode;
+            if (!pill.classList.contains('placeholder')) {
+                pill.classList.add('placeholder');
+                pill.innerHTML = '';
+                delete pill.dataset.teamCode;
+            } else {
+                pill.innerHTML = '';
+                delete pill.dataset.teamCode;
+            }
+            const scoreInput = pill.querySelector('.score');
+            if (scoreInput) scoreInput.remove();
         });
     });
 
+    // Limpiar campeón
     const champ = document.querySelector('[data-match-id="champion"]');
     if (champ) {
         champ.classList.add('placeholder');
@@ -2182,7 +2314,7 @@ function clearBracket() {
         delete champ.dataset.teamCode;
     }
 
-    applyBracketVisualPlaceholders();
+    ensureBracketPillFallbackLabels();
 }
 
 

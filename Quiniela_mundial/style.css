@@ -1875,119 +1875,60 @@ a{ color: inherit; text-decoration: none; }
 }
 
 /* =====================
-   Bracket redesign / visibilidad
+   Estabilización agenda + bracket
    ===================== */
-.bracket-container-topdown{
-  min-width: 1480px;
-  gap: 28px;
-  padding: 52px 28px 32px;
-}
-
-.bracket-wing{
-  gap: 24px;
-  align-items: stretch;
-}
-
-.bracket-round{
-  min-width: 220px;
-  gap: 28px;
-}
-
-.bracket-round.r16{ gap: 52px; }
-.bracket-round.r8{ gap: 148px; }
-.bracket-round.sf{ min-width: 230px; }
-
-.bracket-round::before{
-  top: -34px;
-  font-size: 1.15em;
-  letter-spacing: .04em;
-  color: rgba(255,255,255,0.86);
-}
-
-.match-container{
-  display: flex;
-  flex-direction: column;
+.upcoming-list{
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 10px;
-  padding: 12px 12px 10px;
-  border-radius: 18px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.025));
-  border: 1px solid rgba(255,255,255,0.09);
-  backdrop-filter: blur(10px);
-  box-shadow: 0 16px 40px rgba(0,0,0,0.28);
+  margin-top: 12px;
 }
-
-.match-container:hover{
-  transform: translateY(-1px);
+.upcoming-card{
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255,255,255,.055);
+  border: 1px solid rgba(255,255,255,.12);
+  box-shadow: 0 12px 28px rgba(0,0,0,.22);
 }
-
-.match-badge{
-  display: inline-flex;
-  align-items: center;
-  align-self: flex-start;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: rgba(0,0,0,0.26);
-  border: 1px solid rgba(255,255,255,0.12);
-  color: rgba(255,255,255,0.82);
-  font-size: .75em;
-  font-weight: 800;
+.upcoming-card__top{
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: rgba(255,255,255,.78);
+  font-size: .76rem;
+  font-weight: 900;
+  text-transform: uppercase;
   letter-spacing: .03em;
 }
-
-.team-pill{
-  width: 100%;
-  min-width: 190px;
-  height: 42px;
-  background: rgba(255,255,255,0.085);
-  border-color: rgba(255,255,255,0.18);
+.upcoming-card__teams{
+  margin-top: 7px;
+  color: rgba(255,255,255,.95);
+  font-weight: 900;
+  line-height: 1.2;
 }
-
-.team-pill:hover{
-  border-color: rgba(255,255,255,0.26);
-  box-shadow: 0 18px 46px rgba(0,0,0,0.35);
+.upcoming-card__teams span{
+  color: rgba(0,229,255,.88);
+  font-size: .78em;
+  padding: 0 4px;
 }
-
-.team-pill.placeholder{
-  background: rgba(255,255,255,0.07);
-  border-color: rgba(255,255,255,0.18);
-  border-style: dashed;
-  color: rgba(255,255,255,0.88);
+.upcoming-card__meta{
+  margin-top: 5px;
+  color: rgba(255,255,255,.66);
+  font-size: .82rem;
+  line-height: 1.2;
 }
-
-.team-pill.placeholder .flag{
-  font-size: 1em;
-  opacity: .92;
-}
-
-.team-pill.placeholder .placeholder-label{
-  color: rgba(255,255,255,0.88);
+.team-pill.placeholder:empty::before{
+  content: attr(data-label);
+  display: block;
+  grid-column: 1 / -1;
+  color: rgba(255,255,255,.86);
+  font-weight: 900;
   font-size: .82em;
-  font-weight: 800;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
-
-.team-pill .code{
-  font-size: .92em;
-}
-
-.match-container::after,
-.bracket-round > .match-container::before{
-  background-color: rgba(255,255,255,0.24);
-}
-
-.final-match-wrapper .match-container,
-.third-place-match-wrapper .match-container{
-  min-width: 240px;
-}
-
-@media (max-width: 768px){
-  .bracket-container-topdown{
-    min-width: 1320px;
-    gap: 20px;
-    padding: 42px 16px 24px;
-  }
-
-  .bracket-round{ min-width: 190px; }
-  .match-container{ padding: 10px; }
-  .team-pill{ min-width: 170px; height: 40px; }
-  .match-badge{ font-size: .72em; }
+.team-pill.placeholder .placeholder-label{
+  color: rgba(255,255,255,.84) !important;
+  opacity: 1 !important;
 }
