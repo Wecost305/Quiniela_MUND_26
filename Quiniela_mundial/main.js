@@ -226,6 +226,85 @@ const THIRD_ASSIGNMENT_SLOTS = [
     { matchId: '16-15', matchNo: 'M87', winnerGroup: 'K', label: '1K vs 3º D/E/I/J/L', allowed: ['D','E','I','J','L'] }
 ];
 
+const BRACKET_MATCH_LABELS = {
+    '16-1': 'M73',  '16-2': 'M74',  '16-3': 'M75',  '16-4': 'M76',
+    '16-5': 'M77',  '16-6': 'M78',  '16-7': 'M79',  '16-8': 'M80',
+    '16-9': 'M81',  '16-10': 'M82', '16-11': 'M83', '16-12': 'M84',
+    '16-13': 'M85', '16-14': 'M86', '16-15': 'M87', '16-16': 'M88',
+    '8-1': 'M89',   '8-2': 'M90',   '8-3': 'M91',   '8-4': 'M92',
+    '8-5': 'M93',   '8-6': 'M94',   '8-7': 'M95',   '8-8': 'M96',
+    '4-1': 'M97',   '4-2': 'M98',   '4-3': 'M99',   '4-4': 'M100',
+    '2-1': 'M101',  '2-2': 'M102',  '1-1': 'M103',  '3-1': 'M104'
+};
+
+const BRACKET_DEFAULT_PLACEHOLDERS = {
+    '16-1':  { home: '2º Grupo A', away: '2º Grupo B' },
+    '16-2':  { home: '1º Grupo E', away: '3º A/B/C/D/F' },
+    '16-3':  { home: '1º Grupo F', away: '2º Grupo C' },
+    '16-4':  { home: '1º Grupo C', away: '2º Grupo F' },
+    '16-5':  { home: '1º Grupo I', away: '3º C/D/F/G/H' },
+    '16-6':  { home: '2º Grupo E', away: '2º Grupo I' },
+    '16-7':  { home: '1º Grupo A', away: '3º C/E/F/H/I' },
+    '16-8':  { home: '1º Grupo L', away: '3º E/H/I/J/K' },
+    '16-9':  { home: '1º Grupo D', away: '3º B/E/F/I/J' },
+    '16-10': { home: '1º Grupo G', away: '3º A/E/H/I/J' },
+    '16-11': { home: '2º Grupo K', away: '2º Grupo L' },
+    '16-12': { home: '1º Grupo H', away: '2º Grupo J' },
+    '16-13': { home: '1º Grupo B', away: '3º E/F/G/I/J' },
+    '16-14': { home: '1º Grupo J', away: '2º Grupo H' },
+    '16-15': { home: '1º Grupo K', away: '3º D/E/I/J/L' },
+    '16-16': { home: '2º Grupo D', away: '2º Grupo G' },
+    '8-1':   { home: 'Ganador M73',  away: 'Ganador M74' },
+    '8-2':   { home: 'Ganador M75',  away: 'Ganador M76' },
+    '8-3':   { home: 'Ganador M77',  away: 'Ganador M78' },
+    '8-4':   { home: 'Ganador M79',  away: 'Ganador M80' },
+    '8-5':   { home: 'Ganador M81',  away: 'Ganador M82' },
+    '8-6':   { home: 'Ganador M83',  away: 'Ganador M84' },
+    '8-7':   { home: 'Ganador M85',  away: 'Ganador M86' },
+    '8-8':   { home: 'Ganador M87',  away: 'Ganador M88' },
+    '4-1':   { home: 'Ganador M89',  away: 'Ganador M90' },
+    '4-2':   { home: 'Ganador M91',  away: 'Ganador M92' },
+    '4-3':   { home: 'Ganador M93',  away: 'Ganador M94' },
+    '4-4':   { home: 'Ganador M95',  away: 'Ganador M96' },
+    '2-1':   { home: 'Ganador M97',  away: 'Ganador M98' },
+    '2-2':   { home: 'Ganador M99',  away: 'Ganador M100' },
+    '1-1':   { home: 'Ganador M101', away: 'Ganador M102' },
+    '3-1':   { home: 'Perdedor M101', away: 'Perdedor M102' }
+};
+
+function getBracketRoundTitle(roundKey) {
+    return {
+        r32: 'Dieciseisavos',
+        r16: 'Octavos',
+        r8: 'Cuartos',
+        sf: 'Semifinal'
+    }[roundKey] || '';
+}
+
+function renderBracketMatch(matchId) {
+    const matchLabel = BRACKET_MATCH_LABELS[matchId] || matchId;
+    return `
+        <div class="match-container" data-match-id="${matchId}">
+            <div class="match-badge">${matchLabel}</div>
+            <div class="team-pill placeholder" data-team-pos="home"></div>
+            <div class="team-pill placeholder" data-team-pos="away"></div>
+        </div>`;
+}
+
+function applyBracketVisualPlaceholders() {
+    Object.entries(BRACKET_DEFAULT_PLACEHOLDERS).forEach(([matchId, slots]) => {
+        if (slots.home) setBracketPlaceholder(matchId, 'home', slots.home);
+        if (slots.away) setBracketPlaceholder(matchId, 'away', slots.away);
+    });
+
+    const champion = document.querySelector('[data-match-id="champion"]');
+    if (champion) {
+        champion.classList.add('placeholder');
+        champion.innerHTML = `<span class="flag">🏆</span><span class="code placeholder-label">Campeón</span>`;
+    }
+}
+
+
 function getThirdConfirmationSignature(qualified) {
     if (!qualified?.allGroupsFinished || !Array.isArray(qualified.thirdPlaceData)) return null;
     const topEight = qualified.thirdPlaceData.slice(0, 8);
@@ -1035,35 +1114,17 @@ function generateBracketHTML() {
     // Nueva estructura: dos alas (izquierda y derecha) y una columna central para la final
     container.innerHTML = `
         <div class="bracket-wing left-wing">
-            <div class="bracket-round r32">
-                ${Array.from({ length: 8 }, (_, i) => `
-                    <div class="match-container" data-match-id="16-${i + 1}">
-                        <div class="team-pill placeholder" data-team-pos="home"></div>
-                        <div class="team-pill placeholder" data-team-pos="away"></div>
-                    </div>
-                `).join('')}
+            <div class="bracket-round r32" data-round-title="${getBracketRoundTitle('r32')}">
+                ${Array.from({ length: 8 }, (_, i) => renderBracketMatch(`16-${i + 1}`)).join('')}
             </div>
-            <div class="bracket-round r16">
-                ${Array.from({ length: 4 }, (_, i) => `
-                    <div class="match-container" data-match-id="8-${i + 1}">
-                        <div class="team-pill placeholder" data-team-pos="home"></div>
-                        <div class="team-pill placeholder" data-team-pos="away"></div>
-                    </div>
-                `).join('')}
+            <div class="bracket-round r16" data-round-title="${getBracketRoundTitle('r16')}">
+                ${Array.from({ length: 4 }, (_, i) => renderBracketMatch(`8-${i + 1}`)).join('')}
             </div>
-            <div class="bracket-round r8">
-                ${Array.from({ length: 2 }, (_, i) => `
-                    <div class="match-container" data-match-id="4-${i + 1}">
-                        <div class="team-pill placeholder" data-team-pos="home"></div>
-                        <div class="team-pill placeholder" data-team-pos="away"></div>
-                    </div>
-                `).join('')}
+            <div class="bracket-round r8" data-round-title="${getBracketRoundTitle('r8')}">
+                ${Array.from({ length: 2 }, (_, i) => renderBracketMatch(`4-${i + 1}`)).join('')}
             </div>
-            <div class="bracket-round sf">
-                <div class="match-container" data-match-id="2-1">
-                    <div class="team-pill placeholder" data-team-pos="home"></div>
-                    <div class="team-pill placeholder" data-team-pos="away"></div>
-                </div>
+            <div class="bracket-round sf" data-round-title="${getBracketRoundTitle('sf')}">
+                ${renderBracketMatch('2-1')}
             </div>
         </div>
 
@@ -1079,10 +1140,7 @@ function generateBracketHTML() {
         <!-- ============================================ -->
             <div class="final-match-wrapper">
                 <h3 class="final-title">FINAL</h3>
-                <div class="match-container" data-match-id="1-1">
-                    <div class="team-pill placeholder" data-team-pos="home"></div>
-                    <div class="team-pill placeholder" data-team-pos="away"></div>
-                </div>
+                ${renderBracketMatch('1-1')}
                 <div class="champion-wrapper">
                     <h3 class="champion-title">¡CAMPEÓN!</h3>
                     <div class="team-pill placeholder champion-pill" data-match-id="champion"></div>
@@ -1090,43 +1148,22 @@ function generateBracketHTML() {
             </div>
             <div class="third-place-match-wrapper">
                 <h3 class="final-title">Tercer Lugar</h3>
-                <div class="match-container" data-match-id="3-1">
-                    <div class="team-pill placeholder" data-team-pos="home"></div>
-                    <div class="team-pill placeholder" data-team-pos="away"></div>
-                </div>
+                ${renderBracketMatch('3-1')}
             </div>
         </div>
 
         <div class="bracket-wing right-wing">
-            <div class="bracket-round r32">
-                ${Array.from({ length: 8 }, (_, i) => `
-                    <div class="match-container" data-match-id="16-${i + 9}">
-                        <div class="team-pill placeholder" data-team-pos="home"></div>
-                        <div class="team-pill placeholder" data-team-pos="away"></div>
-                    </div>
-                `).join('')}
+            <div class="bracket-round r32" data-round-title="${getBracketRoundTitle('r32')}">
+                ${Array.from({ length: 8 }, (_, i) => renderBracketMatch(`16-${i + 9}`)).join('')}
             </div>
-            <div class="bracket-round r16">
-                ${Array.from({ length: 4 }, (_, i) => `
-                    <div class="match-container" data-match-id="8-${i + 5}">
-                        <div class="team-pill placeholder" data-team-pos="home"></div>
-                        <div class="team-pill placeholder" data-team-pos="away"></div>
-                    </div>
-                `).join('')}
+            <div class="bracket-round r16" data-round-title="${getBracketRoundTitle('r16')}">
+                ${Array.from({ length: 4 }, (_, i) => renderBracketMatch(`8-${i + 5}`)).join('')}
             </div>
-            <div class="bracket-round r8">
-                ${Array.from({ length: 2 }, (_, i) => `
-                    <div class="match-container" data-match-id="4-${i + 3}">
-                        <div class="team-pill placeholder" data-team-pos="home"></div>
-                        <div class="team-pill placeholder" data-team-pos="away"></div>
-                    </div>
-                `).join('')}
+            <div class="bracket-round r8" data-round-title="${getBracketRoundTitle('r8')}">
+                ${Array.from({ length: 2 }, (_, i) => renderBracketMatch(`4-${i + 3}`)).join('')}
             </div>
-            <div class="bracket-round sf">
-                <div class="match-container" data-match-id="2-2">
-                    <div class="team-pill placeholder" data-team-pos="home"></div>
-                    <div class="team-pill placeholder" data-team-pos="away"></div>
-                </div>
+            <div class="bracket-round sf" data-round-title="${getBracketRoundTitle('sf')}">
+                ${renderBracketMatch('2-2')}
             </div>
         </div>
     `;
@@ -1140,6 +1177,7 @@ function generateBracketHTML() {
         }
     });
 
+    applyBracketVisualPlaceholders();
     addScrollIndicatorToBracket();
 }
 
@@ -2129,29 +2167,22 @@ function populateBracket(qualified) {
 
 function clearBracket() {
     document.querySelectorAll('.bracket-container-topdown .match-container').forEach(match => {
-        // Limpiar estados visuales
         match.querySelectorAll('.team-pill').forEach(pill => {
             pill.classList.remove('loser');
-            if (!pill.classList.contains('placeholder')) {
-                pill.classList.add('placeholder');
-                pill.innerHTML = '';
-                delete pill.dataset.teamCode;
-            } else {
-                pill.innerHTML = '';
-                delete pill.dataset.teamCode;
-            }
-            const scoreInput = pill.querySelector('.score');
-            if (scoreInput) scoreInput.remove();
+            pill.classList.add('placeholder');
+            pill.innerHTML = '';
+            delete pill.dataset.teamCode;
         });
     });
 
-    // Limpiar campeón
     const champ = document.querySelector('[data-match-id="champion"]');
     if (champ) {
         champ.classList.add('placeholder');
         champ.innerHTML = '';
         delete champ.dataset.teamCode;
     }
+
+    applyBracketVisualPlaceholders();
 }
 
 
