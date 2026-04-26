@@ -1844,71 +1844,32 @@ a{ color: inherit; text-decoration: none; }
 }
 
 
-/* Corrección visual bracket: placeholders siempre visibles */
-.team-pill.placeholder{
-  grid-template-columns: 25px minmax(0, 1fr);
-  color: rgba(255,255,255,0.86);
-  background: rgba(255,255,255,0.075);
-  border-color: rgba(255,255,255,0.24);
-}
-.right-wing .team-pill.placeholder{
-  grid-template-columns: 25px minmax(0, 1fr);
-}
-.team-pill.placeholder .placeholder-label{
-  display: block;
-  min-width: 0;
-  width: 100%;
-  color: rgba(255,255,255,0.88);
-  font-size: .76em;
-  font-weight: 850;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-align: left;
-}
-.team-pill.placeholder:empty::before{
-  content: attr(data-placeholder);
-  grid-column: 1 / -1;
-  color: rgba(255,255,255,0.88);
-  font-size: .76em;
-  font-weight: 850;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.team-pill .bracket-placeholder-icon{
-  opacity: .95;
-  font-size: 1em;
-}
-
-
-/* Selector manual de terceros dentro del bracket */
-.team-pill.third-select-placeholder{
-  grid-template-columns: 25px minmax(0, 1fr);
-  overflow: visible;
-  min-width: 190px;
+/* Corrección: terceros seleccionables dentro del bracket */
+.team-pill.third-select-pill{
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  padding-right: 8px;
 }
 .bracket-third-select{
   width: 100%;
   min-width: 0;
   height: 28px;
-  border: 1px solid rgba(0,229,255,0.28);
-  border-radius: 12px;
-  background: rgba(5,10,22,0.94);
-  color: rgba(255,255,255,0.94);
-  font-weight: 850;
-  font-size: .74rem;
-  padding: 0 8px;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 10px;
+  background: rgba(8,12,22,.86);
+  color: rgba(255,255,255,.92);
+  font-weight: 800;
+  font-size: 11px;
   outline: none;
+  padding: 0 8px;
 }
 .bracket-third-select:focus{
-  border-color: rgba(0,229,255,0.70);
-  box-shadow: 0 0 0 3px rgba(0,229,255,0.12);
+  border-color: rgba(0,229,255,.45);
+  box-shadow: 0 0 0 2px rgba(0,229,255,.12);
 }
-.team-pill.third-select-placeholder .bracket-placeholder-icon{
-  color: #00e5ff;
-}
-@media (max-width: 900px){
-  .team-pill.third-select-placeholder{ min-width: 165px; }
-  .bracket-third-select{ font-size: .68rem; }
+.bracket-third-select option{
+  background: #101522;
+  color: #fff;
 }
