@@ -238,6 +238,69 @@ const FIXED_R32_SLOTS = [
     { matchId: '16-16', home: { bucket: 'second', group: 'D', label: '2º Grupo D' }, away: { bucket: 'second', group: 'G', label: '2º Grupo G' } }
 ];
 
+
+// Textos base visibles para que la fase eliminatoria nunca quede con casillas vacías.
+const BRACKET_DEFAULT_PLACEHOLDERS = {
+    '16-1':  { home: '2º Grupo A', away: '2º Grupo B' },
+    '16-2':  { home: '1º Grupo E', away: '3º A/B/C/D/F' },
+    '16-3':  { home: '1º Grupo F', away: '2º Grupo C' },
+    '16-4':  { home: '1º Grupo C', away: '2º Grupo F' },
+    '16-5':  { home: '1º Grupo I', away: '3º C/D/F/G/H' },
+    '16-6':  { home: '2º Grupo E', away: '2º Grupo I' },
+    '16-7':  { home: '1º Grupo A', away: '3º C/E/F/H/I' },
+    '16-8':  { home: '1º Grupo L', away: '3º E/H/I/J/K' },
+    '16-9':  { home: '1º Grupo D', away: '3º B/E/F/I/J' },
+    '16-10': { home: '1º Grupo G', away: '3º A/E/H/I/J' },
+    '16-11': { home: '2º Grupo K', away: '2º Grupo L' },
+    '16-12': { home: '1º Grupo H', away: '2º Grupo J' },
+    '16-13': { home: '1º Grupo B', away: '3º E/F/G/I/J' },
+    '16-14': { home: '1º Grupo J', away: '2º Grupo H' },
+    '16-15': { home: '1º Grupo K', away: '3º D/E/I/J/L' },
+    '16-16': { home: '2º Grupo D', away: '2º Grupo G' },
+    '8-1':   { home: 'Ganador M74', away: 'Ganador M77' },
+    '8-2':   { home: 'Ganador M73', away: 'Ganador M75' },
+    '8-3':   { home: 'Ganador M76', away: 'Ganador M78' },
+    '8-4':   { home: 'Ganador M79', away: 'Ganador M80' },
+    '8-5':   { home: 'Ganador M83', away: 'Ganador M84' },
+    '8-6':   { home: 'Ganador M81', away: 'Ganador M82' },
+    '8-7':   { home: 'Ganador M86', away: 'Ganador M88' },
+    '8-8':   { home: 'Ganador M85', away: 'Ganador M87' },
+    '4-1':   { home: 'Ganador M89', away: 'Ganador M90' },
+    '4-2':   { home: 'Ganador M91', away: 'Ganador M92' },
+    '4-3':   { home: 'Ganador M93', away: 'Ganador M94' },
+    '4-4':   { home: 'Ganador M95', away: 'Ganador M96' },
+    '2-1':   { home: 'Ganador M97', away: 'Ganador M98' },
+    '2-2':   { home: 'Ganador M99', away: 'Ganador M100' },
+    '1-1':   { home: 'Ganador M101', away: 'Ganador M102' },
+    '3-1':   { home: 'Perdedor M101', away: 'Perdedor M102' }
+};
+
+function getDefaultBracketPlaceholder(matchId, position) {
+    return BRACKET_DEFAULT_PLACEHOLDERS?.[matchId]?.[position] || 'Pendiente';
+}
+
+function renderBracketPlaceholderHTML(label, icon = '⏳') {
+    const safeLabel = escapeHTML(label || 'Pendiente');
+    return `<span class="flag bracket-placeholder-icon">${escapeHTML(icon)}</span><span class="code placeholder-label" title="${safeLabel}">${safeLabel}</span>`;
+}
+
+function renderBracketSeedPill(matchId, position) {
+    const label = getDefaultBracketPlaceholder(matchId, position);
+    return `<div class="team-pill placeholder" data-team-pos="${escapeHTML(position)}" data-placeholder="${escapeHTML(label)}">${renderBracketPlaceholderHTML(label)}</div>`;
+}
+
+function renderBracketMatchShell(matchId) {
+    return `
+        <div class="match-container" data-match-id="${escapeHTML(matchId)}">
+            ${renderBracketSeedPill(matchId, 'home')}
+            ${renderBracketSeedPill(matchId, 'away')}
+        </div>`;
+}
+
+function renderBracketRoundShell(prefix, start, count) {
+    return Array.from({ length: count }, (_, i) => renderBracketMatchShell(`${prefix}-${start + i}`)).join('');
+}
+
 function getThirdConfirmationSignature(qualified) {
     if (!qualified?.allGroupsFinished || !Array.isArray(qualified.thirdPlaceData)) return null;
     const topEight = qualified.thirdPlaceData.slice(0, 8);
@@ -267,10 +330,12 @@ function setBracketPlaceholder(matchId, position, label, icon = '⏳') {
     const pill = matchEl.querySelector(`.team-pill[data-team-pos="${position}"]`);
     if (!pill) return;
 
+    const finalLabel = label || getDefaultBracketPlaceholder(matchId, position);
     pill.classList.add('placeholder');
-    pill.classList.remove('loser');
+    pill.classList.remove('loser', 'third-select-pill');
     delete pill.dataset.teamCode;
-    pill.innerHTML = `<span class="flag">${escapeHTML(icon)}</span><span class="code placeholder-label" title="${escapeHTML(label)}">${escapeHTML(label)}</span>`;
+    pill.dataset.placeholder = finalLabel;
+    pill.innerHTML = renderBracketPlaceholderHTML(finalLabel, icon);
 }
 
 function getGroupOrderedCodesFromTable(groupId) {
@@ -1099,101 +1164,56 @@ function generateBracketHTML() {
     const container = document.getElementById('bracket-container');
     if (!container) return;
 
-    // Nueva estructura: dos alas (izquierda y derecha) y una columna central para la final
+    // Estructura de bracket con placeholders visibles desde el primer render.
+    // Así evitamos casillas vacías cuando todavía faltan resultados o terceros por elegir.
     container.innerHTML = `
         <div class="bracket-wing left-wing">
             <div class="bracket-round r32">
-                ${Array.from({ length: 8 }, (_, i) => `
-                    <div class="match-container" data-match-id="16-${i + 1}">
-                        <div class="team-pill placeholder" data-team-pos="home"></div>
-                        <div class="team-pill placeholder" data-team-pos="away"></div>
-                    </div>
-                `).join('')}
+                ${renderBracketRoundShell('16', 1, 8)}
             </div>
             <div class="bracket-round r16">
-                ${Array.from({ length: 4 }, (_, i) => `
-                    <div class="match-container" data-match-id="8-${i + 1}">
-                        <div class="team-pill placeholder" data-team-pos="home"></div>
-                        <div class="team-pill placeholder" data-team-pos="away"></div>
-                    </div>
-                `).join('')}
+                ${renderBracketRoundShell('8', 1, 4)}
             </div>
             <div class="bracket-round r8">
-                ${Array.from({ length: 2 }, (_, i) => `
-                    <div class="match-container" data-match-id="4-${i + 1}">
-                        <div class="team-pill placeholder" data-team-pos="home"></div>
-                        <div class="team-pill placeholder" data-team-pos="away"></div>
-                    </div>
-                `).join('')}
+                ${renderBracketRoundShell('4', 1, 2)}
             </div>
             <div class="bracket-round sf">
-                <div class="match-container" data-match-id="2-1">
-                    <div class="team-pill placeholder" data-team-pos="home"></div>
-                    <div class="team-pill placeholder" data-team-pos="away"></div>
-                </div>
+                ${renderBracketMatchShell('2-1')}
             </div>
         </div>
 
         <div class="bracket-center-final">
-                <!-- ============================================ -->
-        <!-- === ¡AQUÍ VA EL NUEVO ÍCONO DEL TROFEO! === -->
-        <!-- ============================================ -->
-        <div class="trophy-container">
-            <img src="images/copa-mundial.png" alt="Copa del Mundo" class="trophy-image">
-        </div>
-        <!-- ============================================ -->
-        <!-- ===          FIN DEL ÍCONO               === -->
-        <!-- ============================================ -->
+            <div class="trophy-container">
+                <img src="images/copa-mundial.png" alt="Copa del Mundo" class="trophy-image">
+            </div>
             <div class="final-match-wrapper">
                 <h3 class="final-title">FINAL</h3>
-                <div class="match-container" data-match-id="1-1">
-                    <div class="team-pill placeholder" data-team-pos="home"></div>
-                    <div class="team-pill placeholder" data-team-pos="away"></div>
-                </div>
+                ${renderBracketMatchShell('1-1')}
                 <div class="champion-wrapper">
                     <h3 class="champion-title">¡CAMPEÓN!</h3>
-                    <div class="team-pill placeholder champion-pill" data-match-id="champion"></div>
+                    <div class="team-pill placeholder champion-pill" data-match-id="champion" data-placeholder="Campeón">
+                        ${renderBracketPlaceholderHTML('Campeón', '🏆')}
+                    </div>
                 </div>
             </div>
             <div class="third-place-match-wrapper">
                 <h3 class="final-title">Tercer Lugar</h3>
-                <div class="match-container" data-match-id="3-1">
-                    <div class="team-pill placeholder" data-team-pos="home"></div>
-                    <div class="team-pill placeholder" data-team-pos="away"></div>
-                </div>
+                ${renderBracketMatchShell('3-1')}
             </div>
         </div>
 
         <div class="bracket-wing right-wing">
             <div class="bracket-round r32">
-                ${Array.from({ length: 8 }, (_, i) => `
-                    <div class="match-container" data-match-id="16-${i + 9}">
-                        <div class="team-pill placeholder" data-team-pos="home"></div>
-                        <div class="team-pill placeholder" data-team-pos="away"></div>
-                    </div>
-                `).join('')}
+                ${renderBracketRoundShell('16', 9, 8)}
             </div>
             <div class="bracket-round r16">
-                ${Array.from({ length: 4 }, (_, i) => `
-                    <div class="match-container" data-match-id="8-${i + 5}">
-                        <div class="team-pill placeholder" data-team-pos="home"></div>
-                        <div class="team-pill placeholder" data-team-pos="away"></div>
-                    </div>
-                `).join('')}
+                ${renderBracketRoundShell('8', 5, 4)}
             </div>
             <div class="bracket-round r8">
-                ${Array.from({ length: 2 }, (_, i) => `
-                    <div class="match-container" data-match-id="4-${i + 3}">
-                        <div class="team-pill placeholder" data-team-pos="home"></div>
-                        <div class="team-pill placeholder" data-team-pos="away"></div>
-                    </div>
-                `).join('')}
+                ${renderBracketRoundShell('4', 3, 2)}
             </div>
             <div class="bracket-round sf">
-                <div class="match-container" data-match-id="2-2">
-                    <div class="team-pill placeholder" data-team-pos="home"></div>
-                    <div class="team-pill placeholder" data-team-pos="away"></div>
-                </div>
+                ${renderBracketMatchShell('2-2')}
             </div>
         </div>
     `;
@@ -2171,27 +2191,30 @@ function populateBracket(qualified) {
 
 function clearBracket() {
     document.querySelectorAll('.bracket-container-topdown .match-container').forEach(match => {
-        // Limpiar estados visuales
-        match.querySelectorAll('.team-pill').forEach(pill => {
-            pill.classList.remove('loser');
-            if (!pill.classList.contains('placeholder')) {
-                pill.classList.add('placeholder');
-                pill.innerHTML = '';
-                delete pill.dataset.teamCode;
-            } else {
-                pill.innerHTML = '';
-                delete pill.dataset.teamCode;
-            }
-            const scoreInput = pill.querySelector('.score');
-            if (scoreInput) scoreInput.remove();
+        const matchId = match.dataset.matchId;
+        match.querySelectorAll('.team-pill[data-team-pos]').forEach(pill => {
+            const pos = pill.dataset.teamPos;
+            const label = getDefaultBracketPlaceholder(matchId, pos);
+            pill.classList.add('placeholder');
+            pill.classList.remove('loser', 'third-select-pill');
+            delete pill.dataset.teamCode;
+            delete pill.dataset.tiebreakWinner;
+            pill.dataset.placeholder = label;
+            pill.innerHTML = renderBracketPlaceholderHTML(label);
         });
+        delete match.dataset.penalties;
+        delete match.dataset.tiebreakWinner;
+        const meta = match.querySelector('.match-meta');
+        if (meta) meta.innerHTML = '';
     });
 
-    // Limpiar campeón
+    // Limpiar campeón sin dejar la pastilla vacía.
     const champ = document.querySelector('[data-match-id="champion"]');
     if (champ) {
         champ.classList.add('placeholder');
-        champ.innerHTML = '';
+        champ.classList.remove('loser');
+        champ.dataset.placeholder = 'Campeón';
+        champ.innerHTML = renderBracketPlaceholderHTML('Campeón', '🏆');
         delete champ.dataset.teamCode;
     }
 }
