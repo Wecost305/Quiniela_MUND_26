@@ -157,7 +157,7 @@
             <!-- Las tarjetas de grupo se generarán aquí con JavaScript -->
         </div>
 
-        <div class="third-place-table-container">
+        <div class="third-place-table-container" id="thirds-section">
             <h2 class="section-title">MEJORES TERCEROS</h2>
             <table class="third-place-table">
                 <thead>
@@ -238,6 +238,13 @@
             </div>
         </div>
     </div>
+
+    <nav class="mobile-quick-nav" aria-label="Navegación rápida móvil">
+        <button class="mobile-quick-nav__item" type="button" onclick="window.scrollTo({ top: 0, behavior: 'smooth' })">🏠 Inicio</button>
+        <a class="mobile-quick-nav__item" href="#groups-section">⚽ Grupos</a>
+        <a class="mobile-quick-nav__item" href="#thirds-section">🥉 Terceros</a>
+        <button class="mobile-quick-nav__item mobile-quick-nav__item--primary" type="button" onclick="document.getElementById('bracket-modal').style.display='flex'">🏆 Eliminatoria</button>
+    </nav>
 
     <!-- SCRIPTS (AL FINAL Y EN EL ORDEN CORRECTO) -->
     <script src="groups-data.js"></script>
