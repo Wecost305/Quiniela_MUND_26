@@ -1,5 +1,5 @@
 /* =====================================================
-   QUINIELA MUNDIAL 2026 — WC26 STREAM (Neon + Glass)
+   FIXTURE MUNDIAL 2026 — WC26 STREAM (Neon + Glass)
    - CSS limpio (sin duplicados)
    - Mantiene tus clases/JS
    ===================================================== */
@@ -2682,5 +2682,39 @@ a{ color: inherit; text-decoration: none; }
     min-height: 46px;
     font-size: .75rem;
     padding: 8px 6px;
+  }
+}
+
+
+/* =========================================================
+   AJUSTE MÓVIL: vista de tabla sin espacio vacío
+   ========================================================= */
+@media (max-width: 1024px){
+  .groups-grid{
+    align-items: flex-start !important;
+  }
+
+  .group-card,
+  .group-card.show-standings{
+    align-self: flex-start !important;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+
+  .group-card.show-standings .group-matches{
+    display: none !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .group-card.show-standings .manual-group-tools{
+    margin-top: 12px;
+  }
+
+  .group-card.show-standings .standings-table{
+    margin-top: 10px;
   }
 }
