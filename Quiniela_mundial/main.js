@@ -1,5 +1,5 @@
 // =================================================================================
-// === QUINIELA MUNDIAL 2026 - CÓDIGO JAVASCRIPT MAESTRO, FINAL Y VERIFICADO      ===
+// === FIXTURE MUNDIAL 2026 - CÓDIGO JAVASCRIPT MAESTRO, FINAL Y VERIFICADO      ===
 // =================================================================================
 
 // --- CONFIGURACIÓN GLOBAL ---
@@ -1125,7 +1125,7 @@ async function exportElementToPNG(element, filenameBase) {
 async function exportGroupsPNG() {
     closeExportModal();
     const groupsContainer = document.querySelector('.main-content');
-    await exportElementToPNG(groupsContainer, 'quiniela-grupos');
+    await exportElementToPNG(groupsContainer, 'fixture-grupos');
 }
 
 async function exportBracketPNG() {
@@ -1153,7 +1153,7 @@ async function exportBracketPNG() {
     document.body.appendChild(tmp);
 
     try {
-        await exportElementToPNG(clone, 'quiniela-eliminatoria');
+        await exportElementToPNG(clone, 'fixture-eliminatoria');
     } finally {
         tmp.remove();
     }
@@ -1291,7 +1291,7 @@ function initApp() {
     // Verificamos si el usuario ya tiene un nombre guardado
     const savedState = resolveSavedStateForCurrentUser();
     if (savedState && savedState.userName) {
-        document.getElementById('user-name-display').textContent = `Quiniela de: ${savedState.userName}`;
+        document.getElementById('user-name-display').textContent = `Fixture de: ${savedState.userName}`;
     } else {
         // Si no hay nombre, mostramos el modal para que lo ingrese.
         document.getElementById('name-modal').style.display = 'flex';
@@ -1776,7 +1776,7 @@ function initializeEventListeners() {
         const userName = userNameInput.value.trim();
 
         if (userName) {
-            document.getElementById('user-name-display').textContent = `Quiniela de: ${userName}`;
+            document.getElementById('user-name-display').textContent = `Fixture de: ${userName}`;
 
             // Guardamos el nombre junto con el resto de los datos
             const currentState = JSON.parse(localStorage.getItem(storageKey)) || {};
@@ -1797,7 +1797,7 @@ function initializeEventListeners() {
 
     const btnReset = document.getElementById('btn-reset-all');
     if (btnReset) btnReset.addEventListener('click', () => {
-        const typed = prompt('Esto borrará tu quiniela en este dispositivo. Escribe BORRAR para confirmar:');
+        const typed = prompt('Esto borrará tu fixture en este dispositivo. Escribe BORRAR para confirmar:');
         if (typed === 'BORRAR') {
             localStorage.removeItem(storageKey);
             location.reload();
@@ -2746,7 +2746,7 @@ function resolveSavedStateForCurrentUser() {
     const candidates = getQuinielaStorageCandidates();
     const best = candidates[0] || null;
 
-    // Si la llave actual está vacía y existe una quiniela local anterior, la copiamos a la llave del token actual.
+    // Si la llave actual está vacía y existe un fixture local anterior, la copiamos a la llave del token actual.
     // Esto corrige el caso típico después del cambio de TOKEN: el navegador tenía datos en una llave vieja.
     if ((!current || currentScore === 0) && best && best.key !== storageKey && best.scoreCount > 0) {
         try {
@@ -2819,7 +2819,7 @@ function showFixtureDebugPanel(savedState) {
         ].join('\n') : '';
 
         box.textContent = [
-            'DEBUG QUINIELA MUNDIAL 2026',
+            'DEBUG FIXTURE MUNDIAL 2026',
             `storageKey actual: ${storageKey}`,
             `currentUserId: ${currentUserId || '(sin usuario)'}`,
             `partidos guardados: ${scoreCount}`,
